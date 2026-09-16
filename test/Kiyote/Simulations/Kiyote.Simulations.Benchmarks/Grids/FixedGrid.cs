@@ -29,6 +29,14 @@ internal sealed class FixedGrid<T> : IGrid<T> {
 		}
 	}
 
+	public void Set(
+		int column,
+		int row,
+		T value
+	) {
+		_cells[column][row] = value;
+	}
+
 	public int Column => 0;
 
 	public int Row => 0;

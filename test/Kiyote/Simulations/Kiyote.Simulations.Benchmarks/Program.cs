@@ -14,6 +14,7 @@ ManualConfig config = DefaultConfig.Instance
 BenchmarkSwitcher
 	.FromTypes( [
 		typeof( SealedAnalyzerBenchmarks ),
+		typeof( GridFlowBenchmarks ),
 	] )
 	.RunAll( config, args );
 
