@@ -1,0 +1,33 @@
+<Project>
+	<PropertyGroup>
+		<ProductVersion>0.0.1</ProductVersion>
+		<Version Condition=" '$(ProductVersion)' == '' ">0.0.1</Version>
+		<Version Condition=" '$(ProductVersion)' != '' ">$(ProductVersion)</Version>		
+	</PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<AnalysisMode>AllEnabledByDefault</AnalysisMode>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+	</PropertyGroup>
+	
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<DefineConstants>DEBUG;TRACE</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<Authors>Todd Lang</Authors>
+		<Company>Todd Lang</Company>
+		<Copyright>Copyright (c) Todd Lang</Copyright>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://github.com/kiyote/Kiyote.Simulations</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/kiyote/Kiyote.Simulations</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+	</PropertyGroup>
+</Project>

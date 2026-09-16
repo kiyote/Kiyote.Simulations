@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+    - '.github/workflows/ci.yml'
+    - 'src/**'
+    - 'test/**'
+    - 'Kiyote.Simulations.sln'
+    - 'Directory.Packages.props'
+    - 'Directory.Build.props'
+    - 'nuget.config'
+  push:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: 10.0.302
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+permissions:
+  pull-requests: write
+  contents: write
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            ${{ env.DOTNET_VERSION }}
+            
+      - name: Define global.json
+        run: dotnet new globaljson --sdk-version ${{ env.DOTNET_VERSION }}
+          
+      - name: Create tool manifest
+        run: dotnet new tool-manifest
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}        
+
+      - name: Install dotnet-coverage
+        run: dotnet tool install dotnet-coverage
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      
+      - name: Build and Test
+        run: dotnet test --collect:"XPlat Code Coverage"
+
+      - name: Generate coverage file
+        run: dotnet dotnet-coverage merge -o coverage.xml **/coverage.cobertura.xml -f cobertura
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+      - name: Create Orphan Branch
+        shell: bash
+        run: |
+          chmod a+x ${{ github.workspace }}/create-orphan-branch.sh
+          ${{ github.workspace }}/create-orphan-branch.sh badges ${{ github.ref_name }}
+
+      - name: Make Coverage Badge      
+        uses: action-badges/cobertura-coverage-xml-badges@0.5.0
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        with:
+          file-name: coverage.svg
+          badge-branch: badges
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          coverage-file-name: ./coverage.xml    
+
