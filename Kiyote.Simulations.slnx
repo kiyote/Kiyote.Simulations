@@ -30,7 +30,7 @@
   <Folder Name="/test/Kiyote/" />
   <Folder Name="/test/Kiyote/Simulations/">
     <Project Path="test/Kiyote/Simulations/Kiyote.Simulations.Benchmarks/Kiyote.Simulations.Benchmarks.csproj" Id="64b12235-56cb-41f5-bba1-e1287c544303" />
-    <Project Path="test/Kiyote/SImulations/Kiyote.Simulations.IntegrationTests/Kiyote.Simulations.IntegrationTests.csproj" Id="1970bad0-7439-4d11-af97-0232fba513b5" />
+    <Project Path="test/Kiyote/Simulations/Kiyote.Simulations.IntegrationTests/Kiyote.Simulations.IntegrationTests.csproj" Id="1970bad0-7439-4d11-af97-0232fba513b5" />
     <Project Path="test/Kiyote/Simulations/Kiyote.Simulations.UnitTests/Kiyote.Simulations.UnitTests.csproj" Id="b81da4c5-0469-4eed-a082-5b9a2c03dcd8" />
   </Folder>
 </Solution>
