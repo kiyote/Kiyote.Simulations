@@ -37,4 +37,4 @@ git commit -m 'init'
 git push origin "$BRANCH_NAME"
 
 # cleanup
-git checkout --force -
+git checkout --force main
