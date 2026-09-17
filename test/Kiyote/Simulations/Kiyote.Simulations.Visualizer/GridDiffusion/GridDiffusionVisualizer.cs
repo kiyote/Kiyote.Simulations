@@ -39,7 +39,7 @@ internal sealed class GridDiffusionVisualizer {
 		AlwaysPassableStrategy passability = new AlwaysPassableStrategy();
 		BufferSetCellStrategy callback = new BufferSetCellStrategy( buffer );
 
-		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "griddiffusion.apng" ), TimeSpan.FromMilliseconds( 100 ), 0 );
+		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "griddiffusion.gif" ), TimeSpan.FromMilliseconds( 100 ), 0 );
 		_bufferOperation.ScaleToRange( buffer, stretched );
 		builder.AddFrame( stretched );
 		for( int i = 0; i < 100; i++ ) {

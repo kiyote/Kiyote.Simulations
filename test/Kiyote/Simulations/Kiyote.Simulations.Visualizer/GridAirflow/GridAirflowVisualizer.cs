@@ -74,7 +74,7 @@ internal sealed class GridAirflowVisualizer {
 		List<PumpStrategy> pumps = [ new PumpStrategy( _pumpCell.Column, _pumpCell.Row, PumpRate ) ];
 		List<GasSpecies<double, BufferSetCellStrategy>> gases = [ air ];
 
-		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "gridairflow.apng" ), TimeSpan.FromMilliseconds( 100 ), 0 );
+		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "gridairflow.gif" ), TimeSpan.FromMilliseconds( 100 ), 0 );
 		_bufferOperation.ScaleToRange( pressureBuffer, stretched );
 		builder.AddFrame( stretched );
 

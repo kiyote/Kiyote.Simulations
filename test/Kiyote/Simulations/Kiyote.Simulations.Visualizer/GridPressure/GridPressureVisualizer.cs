@@ -64,7 +64,7 @@ internal sealed class GridPressureVisualizer {
 		List<PumpStrategy> oxygenPumps = [ new PumpStrategy( 20, 49, 21.0 ) ];
 		List<PumpStrategy> nitrogenPumps = [ new PumpStrategy( 20, 51, 78.0 ) ];
 
-		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "gridpressure.apng" ), TimeSpan.FromMilliseconds( 100 ), 0 );
+		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "gridpressure.gif" ), TimeSpan.FromMilliseconds( 100 ), 0 );
 		UpdateTotal( oxygenBuffer, nitrogenBuffer, total );
 		_bufferOperation.ScaleToRange( total, stretched );
 		builder.AddFrame( stretched );

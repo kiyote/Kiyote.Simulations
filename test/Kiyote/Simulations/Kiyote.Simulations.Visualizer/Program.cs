@@ -24,7 +24,7 @@ internal sealed class Program {
 			.AddBuffers()
 			.AddNumericBuffers()
 			.AddGridsSimulations()
-			.AddPngImaging()
+			.AddGifImaging()
 			.AddSingleton<GridDiffusionVisualizer>()
 			.AddSingleton<GridFluidVisualizer>()
 			.AddSingleton<GridPressureVisualizer>()

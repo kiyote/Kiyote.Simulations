@@ -70,7 +70,7 @@ internal sealed class GridFluidVisualizer {
 			new( concentration, concentrationSetCell ),
 		];
 
-		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "gridfluid.apng" ), TimeSpan.FromMilliseconds( 100 ), 0 );
+		IAnimationBuilder builder = _animWriter.StartAnimation( Path.Combine( outputFolder, "gridfluid.gif" ), TimeSpan.FromMilliseconds( 100 ), 0 );
 		_bufferOperation.ScaleToRange( concentrationBuffer, stretched );
 		builder.AddFrame( stretched );
 		for( int i = 0; i < 150; i++ ) {

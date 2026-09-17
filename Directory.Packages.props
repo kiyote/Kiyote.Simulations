@@ -13,6 +13,6 @@
     <PackageVersion Include="Kiyote.Buffers" Version="0.11.0" />
     <PackageVersion Include="Kiyote.Buffers.Numerics" Version="0.11.0" />
     <PackageVersion Include="Kiyote.Geometry" Version="0.27.2" />
-    <PackageVersion Include="Kiyote.Imaging" Version="0.0.10" />
+    <PackageVersion Include="Kiyote.Imaging" Version="0.0.11" />
   </ItemGroup>
 </Project>
