@@ -17,6 +17,24 @@ public sealed class GridFluid : IGridFluid {
 
 	private const int ProjectionIterations = 20;
 
+	// Reused across StepVelocity calls instead of renting/returning from ArrayPool.Shared
+	// on every call - GridFluid is meant to be reused against a stable grid size, so these
+	// only ever grow (never shrink) and typically allocate once for the life of the instance.
+	private Velocity[]? _diffuseDeltas;
+	private int[]? _diffuseNeighborCounts;
+	private double[]? _projectDivergence;
+	private double[]? _projectPressure;
+	private Velocity[]? _advectBuffer;
+
+	private static void EnsureCapacity<T>(
+		ref T[]? buffer,
+		int size
+	) {
+		if( buffer is null || buffer.Length < size ) {
+			buffer = new T[size];
+		}
+	}
+
 	void IGridFluid.StepVelocity<TCell, TVelocityAccessor, TVelocityDiffusion, TSampler, TBoundary, TCellSetCell>(
 		IGrid<TCell> grid,
 		TVelocityAccessor velocityAccessor,
@@ -56,7 +74,7 @@ public sealed class GridFluid : IGridFluid {
 		}
 	}
 
-	private static void Diffuse<TVelocityGrid, TVelocityDiffusion, TBoundary, TVelocitySetCell>(
+	private void Diffuse<TVelocityGrid, TVelocityDiffusion, TBoundary, TVelocitySetCell>(
 		TVelocityGrid velocity,
 		TVelocityDiffusion velocityDiffusion,
 		TBoundary boundary,
@@ -77,9 +95,11 @@ public sealed class GridFluid : IGridFluid {
 			return;
 		}
 
-		Velocity[] deltas = ArrayPool<Velocity>.Shared.Rent( size );
-		int[] neighborCounts = ArrayPool<int>.Shared.Rent( size );
-		try {
+		EnsureCapacity( ref _diffuseDeltas, size );
+		EnsureCapacity( ref _diffuseNeighborCounts, size );
+		Velocity[] deltas = _diffuseDeltas!;
+		int[] neighborCounts = _diffuseNeighborCounts!;
+		{
 			Array.Clear( deltas, 0, size );
 			Array.Clear( neighborCounts, 0, size );
 
@@ -156,14 +176,11 @@ public sealed class GridFluid : IGridFluid {
 					velocitySetCell.Callback( cell, updated );
 				}
 			}
-		} finally {
-			ArrayPool<Velocity>.Shared.Return( deltas );
-			ArrayPool<int>.Shared.Return( neighborCounts );
 		}
 	}
 
 	// Iterative Gauss-Seidel relaxation solving for a divergence-free velocity field.
-	private static void Project<TVelocityGrid, TBoundary, TVelocitySetCell>(
+	private void Project<TVelocityGrid, TBoundary, TVelocitySetCell>(
 		TVelocityGrid velocity,
 		TBoundary boundary,
 		TVelocitySetCell velocitySetCell
@@ -182,9 +199,11 @@ public sealed class GridFluid : IGridFluid {
 			return;
 		}
 
-		double[] divergence = ArrayPool<double>.Shared.Rent( size );
-		double[] pressure = ArrayPool<double>.Shared.Rent( size );
-		try {
+		EnsureCapacity( ref _projectDivergence, size );
+		EnsureCapacity( ref _projectPressure, size );
+		double[] divergence = _projectDivergence!;
+		double[] pressure = _projectPressure!;
+		{
 			Array.Clear( divergence, 0, size );
 			Array.Clear( pressure, 0, size );
 
@@ -242,9 +261,6 @@ public sealed class GridFluid : IGridFluid {
 					velocitySetCell.Callback( cell, updated );
 				}
 			}
-		} finally {
-			ArrayPool<double>.Shared.Return( divergence );
-			ArrayPool<double>.Shared.Return( pressure );
 		}
 	}
 
@@ -303,7 +319,7 @@ public sealed class GridFluid : IGridFluid {
 		return pressure[index];
 	}
 
-	private static void Advect<TVelocityGrid, TSampler, TBoundary, TVelocitySetCell>(
+	private void Advect<TVelocityGrid, TSampler, TBoundary, TVelocitySetCell>(
 		TVelocityGrid source,
 		TVelocityGrid velocity,
 		TSampler sampler,
@@ -326,8 +342,9 @@ public sealed class GridFluid : IGridFluid {
 			return;
 		}
 
-		Velocity[] advected = ArrayPool<Velocity>.Shared.Rent( size );
-		try {
+		EnsureCapacity( ref _advectBuffer, size );
+		Velocity[] advected = _advectBuffer!;
+		{
 			for( int row = top; row < top + height; row++ ) {
 				for( int column = left; column < left + width; column++ ) {
 					int index = column - left + ( ( row - top ) * width );
@@ -341,6 +358,8 @@ public sealed class GridFluid : IGridFluid {
 					double traceColumn = column - ( current.X * timeStep );
 					double traceRow = row - ( current.Y * timeStep );
 
+					// Uses IGridSampler's generic Sample<TGrid> overload so source (a struct
+					// implementing IGrid<Velocity>) is sampled without boxing.
 					advected[index] = sampler.Sample( source, traceColumn, traceRow );
 				}
 			}
@@ -356,8 +375,6 @@ public sealed class GridFluid : IGridFluid {
 					velocitySetCell.Callback( cell, advected[index] );
 				}
 			}
-		} finally {
-			ArrayPool<Velocity>.Shared.Return( advected );
 		}
 	}
 

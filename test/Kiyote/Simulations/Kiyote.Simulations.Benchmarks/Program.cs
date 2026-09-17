@@ -15,6 +15,9 @@ BenchmarkSwitcher
 	.FromTypes( [
 		typeof( SealedAnalyzerBenchmarks ),
 		typeof( GridDiffusionBenchmarks ),
+		typeof( GridFluidBenchmarks ),
+		typeof( GridPressureBenchmarks ),
+		typeof( GridAirflowBenchmarks )
 	] )
 	.RunAll( config, args );
 

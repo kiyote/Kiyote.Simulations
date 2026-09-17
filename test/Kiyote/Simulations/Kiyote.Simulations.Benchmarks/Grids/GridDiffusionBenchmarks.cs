@@ -86,12 +86,18 @@ public class GridDiffusionBenchmarks {
 	private readonly AlwaysPassableStrategy _isPassable;
 	private readonly FixedGridSetCellStrategy _setCell;
 
+	private const int PrimingSteps = 100;
+
 	public GridDiffusionBenchmarks() {
 		_gridFlow = new GridDiffusion();
 		_grid = CreateGrid();
 		_strategy = new PressureFlowStrategy( 0.5 );
 		_isPassable = new AlwaysPassableStrategy();
 		_setCell = new FixedGridSetCellStrategy( _grid );
+
+		for( int i = 0; i < PrimingSteps; i++ ) {
+			Flow();
+		}
 	}
 
 	[Benchmark]
