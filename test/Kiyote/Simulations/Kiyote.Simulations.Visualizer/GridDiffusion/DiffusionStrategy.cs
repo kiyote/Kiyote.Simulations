@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer;
+namespace Kiyote.Simulations.Visualizer.GridDiffusion;
 
 [ExcludeFromCodeCoverage]
 internal readonly struct DiffusionStrategy : IDiffusionStrategy<double, double> {

@@ -3,7 +3,7 @@ using Kiyote.Buffers;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Geometry.Grids;
 
-namespace Kiyote.Simulations.Visualizer;
+namespace Kiyote.Simulations.Visualizer.GridDiffusion;
 
 /// <summary>
 /// A dense, fixed-size <see cref="IGrid{T}"/> used to benchmark against a
