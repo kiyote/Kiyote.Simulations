@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Kiyote.Simulations.Visualizer;
 
 internal sealed class Program {
-	public const int Size = 30;
+	public const int Size = 100;
 
 	public static void Main(
 		string[] _
@@ -27,24 +27,26 @@ internal sealed class Program {
 		IServiceProvider services = collection.BuildServiceProvider();
 
 		IAnimationWriter animWriter = services.GetRequiredService<IAnimationWriter>();
-		IGridFlow gridFlow = services.GetRequiredService<IGridFlow>();
+		IGridDiffusion gridFlow = services.GetRequiredService<IGridDiffusion>();
 		INumericBufferFactory bufferFactory = services.GetRequiredService<INumericBufferFactory>();
 		INumericBufferOperator bufferOperator = services.GetRequiredService<INumericBufferOperator>();
 
 		INumericBuffer<byte> stretched = bufferFactory.Create<byte>( Size, Size, 0 );
-		INumericBuffer<byte> buffer = bufferFactory.Create<byte>( Size, Size, 0 );
-		BufferGrid<byte> grid = new BufferGrid<byte>( buffer );
-		buffer[10, 10] = 255;
-		
-		FlowStrategy flow = new FlowStrategy( 0.1 );
+		INumericBuffer<double> buffer = bufferFactory.Create<double>( Size, Size, 0 );
+		BufferGrid<double> grid = new BufferGrid<double>( buffer );
+		buffer[10, 10] = 10000;
+		buffer[90, 50] = 10000;
+		buffer[50, 90] = 10000;
+
+		DiffusionStrategy flow = new DiffusionStrategy( 1.0 );
 		AlwaysPassableStrategy passability = new AlwaysPassableStrategy();
 		BufferSetCellStrategy callback = new BufferSetCellStrategy( buffer );
 
-		IAnimationBuilder builder = animWriter.StartAnimation( Path.Combine( outputFolder, "gridflow.apng" ), TimeSpan.FromMilliseconds( 100 ), 0 );
+		IAnimationBuilder builder = animWriter.StartAnimation( Path.Combine( outputFolder, "griddiffusion.apng" ), TimeSpan.FromMilliseconds( 100 ), 0 );
 		bufferOperator.ScaleToRange( buffer, stretched );
 		builder.AddFrame( stretched );
 		for( int i = 0; i < 100; i++ ) {
-			gridFlow.Flow<byte, int, FlowStrategy, AlwaysPassableStrategy, BufferSetCellStrategy>(
+			gridFlow.Flow<double, double, DiffusionStrategy, AlwaysPassableStrategy, BufferSetCellStrategy>(
 				grid,
 				flow,
 				passability,

@@ -5,19 +5,19 @@ using Kiyote.Geometry.Grids;
 namespace Kiyote.Simulations.Visualizer;
 
 [ExcludeFromCodeCoverage]
-internal readonly struct BufferSetCellStrategy : ICallbackStrategy<byte, byte> {
+internal readonly struct BufferSetCellStrategy : ICallbackStrategy<double, double> {
 
-	private readonly IBuffer<byte> _buffer;
+	private readonly IBuffer<double> _buffer;
 
 	public BufferSetCellStrategy(
-		IBuffer<byte> buffer
+		IBuffer<double> buffer
 	) {
 		_buffer = buffer;
 	}
 
 	public void Callback(
-		GridCell<byte> cell,
-		byte value
+		GridCell<double> cell,
+		double value
 	) {
 		_buffer[cell.Column, cell.Row] = value;
 	}

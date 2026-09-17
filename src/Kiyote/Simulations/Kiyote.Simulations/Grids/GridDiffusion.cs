@@ -3,7 +3,7 @@ using Kiyote.Geometry.Grids;
 
 namespace Kiyote.Simulations.Grids;
 
-public sealed class GridFlow : IGridFlow {
+public sealed class GridDiffusion : IGridDiffusion {
 
 	private static readonly (int DeltaColumn, int DeltaRow)[] _edgeDeltas = [
 		( 1, 0 ),
@@ -12,7 +12,7 @@ public sealed class GridFlow : IGridFlow {
 		( 1, -1 ),
 	];
 
-	void IGridFlow.Flow<TCell, TFlow, TFlowStrategy, TPassability, TSetCell>(
+	void IGridDiffusion.Flow<TCell, TFlow, TFlowStrategy, TPassability, TSetCell>(
 		IGrid<TCell> grid,
 		TFlowStrategy strategy,
 		TPassability isPassable,
@@ -31,8 +31,10 @@ public sealed class GridFlow : IGridFlow {
 		}
 
 		TFlow[] deltas = ArrayPool<TFlow>.Shared.Rent( size );
+		int[] neighborCounts = ArrayPool<int>.Shared.Rent( size );
 		try {
 			Array.Clear( deltas, 0, size );
+			Array.Clear( neighborCounts, 0, size );
 
 			for( int row = top; row < top + height; row++ ) {
 				for( int column = left; column < left + width; column++ ) {
@@ -62,9 +64,45 @@ public sealed class GridFlow : IGridFlow {
 							continue;
 						}
 
-						TFlow transfer = strategy.CalculateTransfer( source, destination );
+						int destinationIndex = neighborColumn - left + ( ( neighborRow - top ) * width );
+						neighborCounts[sourceIndex]++;
+						neighborCounts[destinationIndex]++;
+					}
+				}
+			}
+
+			for( int row = top; row < top + height; row++ ) {
+				for( int column = left; column < left + width; column++ ) {
+					GridCell<TCell> source = new( column, row, grid[column, row] );
+
+					if( !isPassable.Evaluate( source ) ) {
+						continue;
+					}
+
+					int sourceIndex = column - left + ( ( row - top ) * width );
+
+					foreach( (int deltaColumn, int deltaRow) in _edgeDeltas ) {
+						int neighborColumn = column + deltaColumn;
+						int neighborRow = row + deltaRow;
+
+						if( neighborColumn < left
+							|| neighborColumn >= left + width
+							|| neighborRow < top
+							|| neighborRow >= top + height
+						) {
+							continue;
+						}
+
+						GridCell<TCell> destination = new( neighborColumn, neighborRow, grid[neighborColumn, neighborRow] );
+
+						if( !isPassable.Evaluate( destination ) ) {
+							continue;
+						}
 
 						int destinationIndex = neighborColumn - left + ( ( neighborRow - top ) * width );
+
+						TFlow transfer = strategy.CalculateTransfer( source, destination, neighborCounts[sourceIndex], neighborCounts[destinationIndex] );
+
 						deltas[sourceIndex] = strategy.Combine( deltas[sourceIndex], strategy.Negate( transfer ) );
 						deltas[destinationIndex] = strategy.Combine( deltas[destinationIndex], transfer );
 					}
@@ -87,6 +125,7 @@ public sealed class GridFlow : IGridFlow {
 			}
 		} finally {
 			ArrayPool<TFlow>.Shared.Return( deltas );
+			ArrayPool<int>.Shared.Return( neighborCounts );
 		}
 	}
 

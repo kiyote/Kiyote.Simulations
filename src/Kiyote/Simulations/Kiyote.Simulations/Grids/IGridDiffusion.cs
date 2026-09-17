@@ -2,7 +2,7 @@ using Kiyote.Geometry.Grids;
 
 namespace Kiyote.Simulations.Grids;
 
-public interface IGridFlow {
+public interface IGridDiffusion {
 
 	void Flow<TCell, TFlow, TFlowStrategy, TPassability, TSetCell>(
 		IGrid<TCell> grid,
@@ -10,7 +10,7 @@ public interface IGridFlow {
 		TPassability isPassable,
 		TSetCell setCell
 	)
-		where TFlowStrategy : IFlowStrategy<TCell, TFlow>
+		where TFlowStrategy : IDiffusionStrategy<TCell, TFlow>
 		where TPassability : ICellStrategy<TCell, bool>
 		where TSetCell : ICallbackStrategy<TCell, TCell>;
 

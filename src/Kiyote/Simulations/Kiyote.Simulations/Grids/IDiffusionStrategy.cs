@@ -2,11 +2,13 @@ using Kiyote.Geometry.Grids;
 
 namespace Kiyote.Simulations.Grids;
 
-public interface IFlowStrategy<TCell, TFlow> {
+public interface IDiffusionStrategy<TCell, TFlow> {
 
 	TFlow CalculateTransfer(
 		GridCell<TCell> source,
-		GridCell<TCell> destination
+		GridCell<TCell> destination,
+		int sourceNeighborCount,
+		int destinationNeighborCount
 	);
 
 	TFlow Combine(

@@ -4,10 +4,10 @@ using Kiyote.Geometry.Grids;
 namespace Kiyote.Simulations.Visualizer;
 
 [ExcludeFromCodeCoverage]
-internal readonly struct AlwaysPassableStrategy : ICellStrategy<byte, bool> {
+internal readonly struct AlwaysPassableStrategy : ICellStrategy<double, bool> {
 
 	public bool Evaluate(
-		GridCell<byte> cell
+		GridCell<double> cell
 	) {
 		return true;
 	}

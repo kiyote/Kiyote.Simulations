@@ -11,6 +11,6 @@ public static class ExtensionMethods {
 	) {
 		return services
 			.AddSingleton<ISealedAnalyzer, SealedAnalyzer>()
-			.AddSingleton<IGridFlow, GridFlow>();
+			.AddSingleton<IGridDiffusion, GridDiffusion>();
 	}
 }
