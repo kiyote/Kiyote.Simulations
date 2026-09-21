@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Kiyote.Buffers;
 using Kiyote.Geometry.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridDiffusion;
+namespace Kiyote.Simulations.Visualizer;
 
 [ExcludeFromCodeCoverage]
 internal readonly struct BufferSetCellStrategy : ICallbackStrategy<double, double> {

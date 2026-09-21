@@ -1,9 +1,9 @@
 using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
 using Kiyote.Simulations.Grids;
-using Kiyote.Simulations.Visualizer.GridDiffusion;
+using Kiyote.Simulations.Visualizer;
 
-namespace Kiyote.Simulations.Visualizer.GridFluid;
+namespace Kiyote.Simulations.Visualizer.Grids.GridFluid;
 
 internal sealed class GridFluidVisualizer {
 

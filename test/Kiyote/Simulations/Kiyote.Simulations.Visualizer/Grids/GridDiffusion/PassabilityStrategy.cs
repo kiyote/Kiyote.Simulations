@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridDiffusion;
+namespace Kiyote.Simulations.Visualizer.Grids.GridDiffusion;
 
 [ExcludeFromCodeCoverage]
 internal readonly struct AlwaysPassableStrategy : ICellStrategy<double, bool> {

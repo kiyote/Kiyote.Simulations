@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridPressure;
+namespace Kiyote.Simulations.Visualizer.Grids.GridPressure;
 
 // Injects a fixed amount of a gas species' partial pressure per second at a
 // single cell (a pump), or extracts it (a vent) when the rate is negative.

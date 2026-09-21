@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridFluid;
+namespace Kiyote.Simulations.Visualizer.Grids.GridFluid;
 
 // The visualizer's grid cell type is Velocity itself, so this accessor is just an identity mapping.
 [ExcludeFromCodeCoverage]

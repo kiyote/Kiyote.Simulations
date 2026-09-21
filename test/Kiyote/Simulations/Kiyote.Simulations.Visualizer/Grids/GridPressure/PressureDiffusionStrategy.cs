@@ -2,20 +2,22 @@ using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridDiffusion;
+namespace Kiyote.Simulations.Visualizer.Grids.GridPressure;
 
+// A rate-based Fickian diffusion strategy for a gas species' partial pressure,
+// mirroring Visualizer.GridDiffusion.DiffusionStrategy.
 [ExcludeFromCodeCoverage]
-internal readonly struct DiffusionStrategy : IDiffusionStrategy<double, double> {
+internal readonly struct PressureDiffusionStrategy : IDiffusionStrategy<double, double> {
 
-	private readonly double _viscosity;
+	private readonly double _rate;
 
-	public DiffusionStrategy() : this( 1.0 ) { }
+	public PressureDiffusionStrategy() : this( 1.0 ) { }
 
-	// viscosity ranges from 0 (no flow) to 1 (fully equalizes in a single step).
-	public DiffusionStrategy(
-		double viscosity
+	// rate ranges from 0 (no flow) to 1 (fully equalizes in a single step).
+	public PressureDiffusionStrategy(
+		double rate
 	) {
-		_viscosity = viscosity;
+		_rate = rate;
 	}
 
 	public double CalculateTransfer(
@@ -25,7 +27,7 @@ internal readonly struct DiffusionStrategy : IDiffusionStrategy<double, double> 
 		int destinationNeighborCount
 	) {
 		int divisor = 2 * Math.Max( sourceNeighborCount, destinationNeighborCount );
-		return ( source.Cell - destination.Cell ) * _viscosity / divisor;
+		return ( source.Cell - destination.Cell ) * _rate / divisor;
 	}
 
 	public double Combine(
@@ -45,7 +47,7 @@ internal readonly struct DiffusionStrategy : IDiffusionStrategy<double, double> 
 		GridCell<double> cell,
 		double delta
 	) {
-		return Math.Max( 0, cell.Cell + delta );
+		return Math.Max( 0.0, cell.Cell + delta );
 	}
 
 }

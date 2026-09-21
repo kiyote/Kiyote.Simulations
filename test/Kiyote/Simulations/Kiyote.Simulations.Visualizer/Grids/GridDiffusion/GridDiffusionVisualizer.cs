@@ -2,7 +2,9 @@ using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridDiffusion;
+namespace Kiyote.Simulations.Visualizer.Grids.GridDiffusion;
+
+using Kiyote.Simulations.Visualizer;
 
 internal sealed class GridDiffusionVisualizer {
 

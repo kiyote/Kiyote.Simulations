@@ -2,11 +2,12 @@ using Kiyote.Buffers;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
 using Kiyote.Simulations.Grids;
-using Kiyote.Simulations.Visualizer.GridDiffusion;
-using Kiyote.Simulations.Visualizer.GridFluid;
-using Kiyote.Simulations.Visualizer.GridPressure;
 using Kiyote.Simulations.Visualizer.GridAirflow;
 using Microsoft.Extensions.DependencyInjection;
+using Kiyote.Simulations.Visualizer.Grids.GridPressure;
+using Kiyote.Simulations.Visualizer.Grids.GridFluid;
+using Kiyote.Simulations.Visualizer.Grids.GridDiffusion;
+using Kiyote.Simulations.Visualizer.Temperature;
 
 namespace Kiyote.Simulations.Visualizer;
 
@@ -23,14 +24,24 @@ internal sealed class Program {
 		collection
 			.AddBuffers()
 			.AddNumericBuffers()
-			.AddGridsSimulations()
+			.AddSimulations()
 			.AddGifImaging()
+			.AddSingleton<GridRadiationVisualizer>()
+			.AddSingleton<GridTemperatureVisualizer>();
+		/*
 			.AddSingleton<GridDiffusionVisualizer>()
 			.AddSingleton<GridFluidVisualizer>()
 			.AddSingleton<GridPressureVisualizer>()
 			.AddSingleton<GridAirflowVisualizer>();
+		*/
 
 		IServiceProvider services = collection.BuildServiceProvider();
+
+		GridRadiationVisualizer gridRadiationVisualizer = services.GetRequiredService<GridRadiationVisualizer>();
+		gridRadiationVisualizer.Execute( outputFolder );
+
+		GridTemperatureVisualizer gridTemperatureVisualizer = services.GetRequiredService<GridTemperatureVisualizer>();
+		gridTemperatureVisualizer.Execute( outputFolder );
 
 		/*
 		GridDiffusionVisualizer gridDiffusionVisualizer = services.GetRequiredService<GridDiffusionVisualizer>();
@@ -41,10 +52,10 @@ internal sealed class Program {
 
 		GridPressureVisualizer gridPressureVisualizer = services.GetRequiredService<GridPressureVisualizer>();
 		gridPressureVisualizer.Execute( outputFolder );
-		*/
 
 		GridAirflowVisualizer gridAirflowVisualizer = services.GetRequiredService<GridAirflowVisualizer>();
 		gridAirflowVisualizer.Execute( outputFolder );
+		*/
 	}
 
 }

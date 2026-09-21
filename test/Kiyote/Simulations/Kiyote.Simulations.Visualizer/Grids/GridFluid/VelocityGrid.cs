@@ -1,7 +1,7 @@
 using Kiyote.Geometry.Grids;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridFluid;
+namespace Kiyote.Simulations.Visualizer.Grids.GridFluid;
 
 /// <summary>
 /// A dense, fixed-size <see cref="IGrid{T}"/> of <see cref="Velocity"/> values used to

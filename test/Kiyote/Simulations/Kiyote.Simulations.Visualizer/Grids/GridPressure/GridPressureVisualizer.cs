@@ -1,9 +1,10 @@
 using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
 using Kiyote.Simulations.Grids;
-using Kiyote.Simulations.Visualizer.GridDiffusion;
+using Kiyote.Simulations.Visualizer;
+using Kiyote.Simulations.Visualizer.Grids.GridDiffusion;
 
-namespace Kiyote.Simulations.Visualizer.GridPressure;
+namespace Kiyote.Simulations.Visualizer.Grids.GridPressure;
 
 // Demonstrates two independent gas species (oxygen, nitrogen) diffusing across
 // a shared room while pumps inject each gas, aiming for a breathable mix of

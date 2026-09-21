@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridFluid;
+namespace Kiyote.Simulations.Visualizer.Grids.GridFluid;
 
 // Describes two rectangular chambers connected by a narrow corridor; everything
 // outside of those three regions is treated as solid hull.

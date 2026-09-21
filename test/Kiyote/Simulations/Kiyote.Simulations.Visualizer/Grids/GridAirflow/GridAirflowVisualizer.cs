@@ -1,9 +1,9 @@
 using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
 using Kiyote.Simulations.Grids;
-using Kiyote.Simulations.Visualizer.GridDiffusion;
-using Kiyote.Simulations.Visualizer.GridFluid;
-using Kiyote.Simulations.Visualizer.GridPressure;
+using Kiyote.Simulations.Visualizer;
+using Kiyote.Simulations.Visualizer.Grids.GridFluid;
+using Kiyote.Simulations.Visualizer.Grids.GridPressure;
 namespace Kiyote.Simulations.Visualizer.GridAirflow;
 
 // Demonstrates realistic bulk-airflow re-pressurization: room A starts full of

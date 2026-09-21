@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 using Kiyote.Simulations.Grids;
 
-namespace Kiyote.Simulations.Visualizer.GridFluid;
+namespace Kiyote.Simulations.Visualizer.Grids.GridFluid;
 
 [ExcludeFromCodeCoverage]
 internal readonly struct VelocityDiffusionStrategy : IDiffusionStrategy<Velocity, Velocity> {
