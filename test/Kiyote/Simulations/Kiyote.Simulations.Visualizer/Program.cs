@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Kiyote.Simulations.Visualizer.Grids.GridPressure;
 using Kiyote.Simulations.Visualizer.Grids.GridFluid;
 using Kiyote.Simulations.Visualizer.Grids.GridDiffusion;
-using Kiyote.Simulations.Visualizer.Temperature;
 
 namespace Kiyote.Simulations.Visualizer;
 
@@ -25,9 +24,7 @@ internal sealed class Program {
 			.AddBuffers()
 			.AddNumericBuffers()
 			.AddSimulations()
-			.AddGifImaging()
-			.AddSingleton<GridRadiationVisualizer>()
-			.AddSingleton<GridTemperatureVisualizer>();
+			.AddGifImaging();
 		/*
 			.AddSingleton<GridDiffusionVisualizer>()
 			.AddSingleton<GridFluidVisualizer>()
@@ -36,12 +33,6 @@ internal sealed class Program {
 		*/
 
 		IServiceProvider services = collection.BuildServiceProvider();
-
-		GridRadiationVisualizer gridRadiationVisualizer = services.GetRequiredService<GridRadiationVisualizer>();
-		gridRadiationVisualizer.Execute( outputFolder );
-
-		GridTemperatureVisualizer gridTemperatureVisualizer = services.GetRequiredService<GridTemperatureVisualizer>();
-		gridTemperatureVisualizer.Execute( outputFolder );
 
 		/*
 		GridDiffusionVisualizer gridDiffusionVisualizer = services.GetRequiredService<GridDiffusionVisualizer>();
