@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Kiyote.Simulations.Diffusion;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Kiyote.Simulations;
@@ -9,6 +10,7 @@ public static class ExtensionMethods {
 	public static IServiceCollection AddSimulations(
 		this IServiceCollection services
 	) {
-		return services;
+		return services
+			.AddSingleton<IGridDiffusion, GridDiffusion>();
 	}
 }

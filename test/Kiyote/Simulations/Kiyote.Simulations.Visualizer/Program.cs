@@ -6,7 +6,7 @@ using Kiyote.Simulations.Visualizer.GridAirflow;
 using Microsoft.Extensions.DependencyInjection;
 using Kiyote.Simulations.Visualizer.Grids.GridPressure;
 using Kiyote.Simulations.Visualizer.Grids.GridFluid;
-using Kiyote.Simulations.Visualizer.Grids.GridDiffusion;
+using Kiyote.Simulations.Visualizer.Diffusion;
 
 namespace Kiyote.Simulations.Visualizer;
 
@@ -24,9 +24,9 @@ internal sealed class Program {
 			.AddBuffers()
 			.AddNumericBuffers()
 			.AddSimulations()
-			.AddGifImaging();
+			.AddGifImaging()
+			.AddSingleton<GridDiffusionVisualizer>();
 		/*
-			.AddSingleton<GridDiffusionVisualizer>()
 			.AddSingleton<GridFluidVisualizer>()
 			.AddSingleton<GridPressureVisualizer>()
 			.AddSingleton<GridAirflowVisualizer>();
@@ -34,10 +34,10 @@ internal sealed class Program {
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
-		/*
 		GridDiffusionVisualizer gridDiffusionVisualizer = services.GetRequiredService<GridDiffusionVisualizer>();
 		gridDiffusionVisualizer.Execute( outputFolder );
 
+		/*
 		GridFluidVisualizer gridFluidVisualizer = services.GetRequiredService<GridFluidVisualizer>();
 		gridFluidVisualizer.Execute( outputFolder );
 

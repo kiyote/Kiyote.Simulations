@@ -9,7 +9,7 @@ namespace Kiyote.Simulations.Visualizer;
 /// A dense, fixed-size <see cref="IGrid{T}"/> used to benchmark against a
 /// consistent 100x100 layout without the overhead of attach/detach support.
 /// </summary>
-internal sealed class BufferGrid<T> : INumericBuffer<T>, IGrid<T> where T: struct, INumber<T> {
+internal sealed class BufferGrid<T> : INumericBuffer<T>, IMutableGrid<T> where T: struct, INumber<T> {
 
 	private readonly IBuffer<T> _buffer;
 
@@ -30,6 +30,8 @@ internal sealed class BufferGrid<T> : INumericBuffer<T>, IGrid<T> where T: struc
 	int IGrid<T>.Width => _buffer.Columns;
 
 	int IGrid<T>.Height => _buffer.Rows;
+
+	T IMutableGrid<T>.this[int column, int row] { get => _buffer[column, row]; set => _buffer[column, row] = value; }
 
 	T IGrid<T>.this[int column, int row] => _buffer[column, row];
 
