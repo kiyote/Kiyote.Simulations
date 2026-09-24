@@ -19,10 +19,6 @@ public sealed class GridDiffusion : IGridDiffusion {
 		IMutableGrid<TValue> destination,
 		TFlowStrategy flow
 	) {
-		ArgumentNullException.ThrowIfNull( source );
-		ArgumentNullException.ThrowIfNull( connectivity );
-		ArgumentNullException.ThrowIfNull( destination );
-		ArgumentNullException.ThrowIfNull( flow );
 		if( source.Width != destination.Width
 			|| source.Height != destination.Height
 		) {

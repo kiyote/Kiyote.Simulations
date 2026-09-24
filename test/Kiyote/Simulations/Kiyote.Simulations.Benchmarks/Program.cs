@@ -2,8 +2,10 @@ using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
+using Kiyote.Simulations.Benchmarks.Diffusion;
+using Kiyote.Simulations.Benchmarks.Pressure;
+using Kiyote.Simulations.Benchmarks.Projection;
 
-/*
 ManualConfig config = DefaultConfig.Instance
 	.AddExporter( MarkdownExporter.Default )
 	.AddJob( Job
@@ -13,15 +15,8 @@ ManualConfig config = DefaultConfig.Instance
 
 BenchmarkSwitcher
 	.FromTypes( [
-		typeof( SealedAnalyzerBenchmarks ),
-		typeof( GridDiffusionBenchmarks ),
-		typeof( GridFluidBenchmarks ),
-		typeof( GridPressureBenchmarks ),
-		typeof( GridAirflowBenchmarks )
+		//typeof( GridDiffusionBenchmarks ),
+		//typeof( GridPressureBenchmarks ),
+		typeof( GridProjectionBenchmarks ),
 	] )
 	.RunAll( config, args );
-
-
-*/
-
-Console.WriteLine( "Hello world." );

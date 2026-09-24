@@ -13,9 +13,6 @@ public sealed class GridPressure : IGridPressure {
 		IGridDiffusion gridDiffusion,
 		ISimulationClock clock
 	) {
-		ArgumentNullException.ThrowIfNull( gridDiffusion );
-		ArgumentNullException.ThrowIfNull( clock );
-
 		_gridDiffusion = gridDiffusion;
 		_clock = clock;
 	}
@@ -26,8 +23,6 @@ public sealed class GridPressure : IGridPressure {
 		IMutableGrid<TPressure> destination,
 		TPressureStrategy pressure
 	) {
-		ArgumentNullException.ThrowIfNull( pressure );
-
 		_gridDiffusion.Update<TCell, TPressure, TFlow, PressureDiffusionStrategy<TPressure, TFlow, TPressureStrategy>>(
 			connectivity,
 			source,

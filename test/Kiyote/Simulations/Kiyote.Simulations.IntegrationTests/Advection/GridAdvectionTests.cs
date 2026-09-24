@@ -1,9 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
-using Kiyote.Simulations.Advection;
+using Kiyote.Simulations.IntegrationTests;
 
-namespace Kiyote.Simulations.IntegrationTests.Advection;
+namespace Kiyote.Simulations.Advection.IntegrationTests;
 
 [TestFixture]
 [ExcludeFromCodeCoverage]

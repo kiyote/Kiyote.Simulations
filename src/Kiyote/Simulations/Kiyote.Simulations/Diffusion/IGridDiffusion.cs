@@ -5,11 +5,11 @@ namespace Kiyote.Simulations.Diffusion;
 
 public interface IGridDiffusion {
 
-	void Update<TCell, TValue, TFlow, TFlowStrategy>(
+	void Update<TCell, TValue, TFlow, TDiffusionStrategy>(
 		IConnectivityGrid<TCell> connectivity,
 		IGrid<TValue> source,
 		IMutableGrid<TValue> destination,
-		TFlowStrategy flow
+		TDiffusionStrategy diffusionStrategy
 	)
-		where TFlowStrategy : IDiffusionStrategy<TValue, TFlow>;
+		where TDiffusionStrategy : IDiffusionStrategy<TValue, TFlow>;
 }
