@@ -1,40 +1,39 @@
 using Kiyote.Geometry.Grids;
-using Kiyote.Simulations.Diffusion;
 
-namespace Kiyote.Simulations.IntegrationTests.Diffusion;
+namespace Kiyote.Simulations.Diffusion.IntegrationTests;
 
-public sealed class TestFlowStrategy : IDiffusionStrategy<double, double> {
+public sealed class TestFlowStrategy : IDiffusionStrategy<float, float> {
 
-	double IDiffusionStrategy<double, double>.CalculateTransfer(
-		GridCell<double> source,
-		GridCell<double> destination,
+	float IDiffusionStrategy<float, float>.CalculateTransfer(
+		GridCell<float> source,
+		GridCell<float> destination,
 		int sourceNeighborCount,
 		int destinationNeighborCount
 	) {
 		if( sourceNeighborCount == 0 ) {
-			return 0d;
+			return 0f;
 		}
 
-		double difference = source.Cell - destination.Cell;
+		float difference = source.Cell - destination.Cell;
 		return difference / ( sourceNeighborCount + 1 );
 	}
 
-	double IDiffusionStrategy<double, double>.Combine(
-		double left,
-		double right
+	float IDiffusionStrategy<float, float>.Combine(
+		float left,
+		float right
 	) {
 		return left + right;
 	}
 
-	double IDiffusionStrategy<double, double>.Negate(
-		double value
+	float IDiffusionStrategy<float, float>.Negate(
+		float value
 	) {
 		return -value;
 	}
 
-	double IDiffusionStrategy<double, double>.Apply(
-		GridCell<double> cell,
-		double delta
+	float IDiffusionStrategy<float, float>.Apply(
+		GridCell<float> cell,
+		float delta
 	) {
 		return cell.Cell + delta;
 	}

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Simulations.Diffusion;
+using Kiyote.Simulations.Pressure;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Kiyote.Simulations;
@@ -11,6 +12,8 @@ public static class ExtensionMethods {
 		this IServiceCollection services
 	) {
 		return services
-			.AddSingleton<IGridDiffusion, GridDiffusion>();
+			.AddSingleton<ISimulationClock, SimulationClock>()
+			.AddSingleton<IGridDiffusion, GridDiffusion>()
+			.AddSingleton<IGridPressure, GridPressure>();
 	}
 }
