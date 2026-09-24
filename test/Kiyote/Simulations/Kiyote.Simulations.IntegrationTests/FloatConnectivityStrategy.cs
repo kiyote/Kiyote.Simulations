@@ -1,9 +1,9 @@
 using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
 
-namespace Kiyote.Simulations.Pressure.IntegrationTests;
+namespace Kiyote.Simulations.IntegrationTests; 
 
-public sealed class TestConnectivityStrategy : IConnectivityStrategy<float> {
+public sealed class FloatConnectivityStrategy : IConnectivityStrategy<float> {
 	bool IConnectivityStrategy<float>.Evaluate(
 		GridCell<float> source,
 		GridCell<float> destination,

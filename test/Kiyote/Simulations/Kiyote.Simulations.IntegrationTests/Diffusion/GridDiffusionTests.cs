@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
+using Kiyote.Simulations.IntegrationTests;
 
 namespace Kiyote.Simulations.Diffusion.IntegrationTests;
 
@@ -14,13 +15,13 @@ public sealed class GridDiffusionTests {
 
 	private readonly IGridDiffusion _diffusion;
 
-	private readonly TestConnectivityStrategy _strategy;
-	private readonly TestFlowStrategy _flow;
+	private readonly FloatConnectivityStrategy _connectivityStrategy;
+	private readonly FloatDiffusionStrategy _flow;
 
 	public GridDiffusionTests() {
-		_strategy = new TestConnectivityStrategy();
+		_connectivityStrategy = new FloatConnectivityStrategy();
 		_diffusion = new GridDiffusion();
-		_flow = new TestFlowStrategy();
+		_flow = new FloatDiffusionStrategy();
 	}
 
 
@@ -30,14 +31,14 @@ public sealed class GridDiffusionTests {
 		_input = new ArrayGrid<float>( 10, 10 );
 		_output = new ArrayGrid<float>( 10, 10 );
 		_connectivity.TryAttach( _input, 0, 0 );
-		_connectivity.UpdateConnectivity( _strategy );
+		_connectivity.UpdateConnectivity( _connectivityStrategy );
 	}
 
 	[Test]
 	public void Update_OneStep_OutputUpdated() {
 		_input[5, 5] = 1000f;
 
-		_diffusion.Update<float, float, TestFlowStrategy>( _input, _connectivity, _output, _flow );
+		_diffusion.Update<float, float, float, FloatDiffusionStrategy>( _input, _connectivity, _output, _flow );
 
 		// ConnectivityStrategy allows orthogonal moves whenever both ends exist and are
 		// solid, and allows diagonal moves whenever at least one of the two orthogonal

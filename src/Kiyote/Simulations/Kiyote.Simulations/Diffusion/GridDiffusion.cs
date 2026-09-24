@@ -13,10 +13,10 @@ public sealed class GridDiffusion : IGridDiffusion {
 		( 1, -1, Direction.NorthEast ),
 	];
 
-	void IGridDiffusion.Update<TCell, TFlow, TFlowStrategy>(
-		IGrid<TCell> source,
+	void IGridDiffusion.Update<TCell, TValue, TFlow, TFlowStrategy>(
+		IGrid<TValue> source,
 		IConnectivityGrid<TCell> connectivity,
-		IMutableGrid<TCell> destination,
+		IMutableGrid<TValue> destination,
 		TFlowStrategy flow
 	) {
 		ArgumentNullException.ThrowIfNull( source );
@@ -75,7 +75,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 
 			for( int row = top; row < top + height; row++ ) {
 				for( int column = left; column < left + width; column++ ) {
-					GridCell<TCell> sourceCell = new( column, row, source[column, row] );
+					GridCell<TValue> sourceCell = new( column, row, source[column, row] );
 					int sourceIndex = column - left + ( ( row - top ) * width );
 					Direction sourceConnectivity = connectivity[column, row];
 
@@ -95,7 +95,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 							continue;
 						}
 
-						GridCell<TCell> destinationCell = new( neighborColumn, neighborRow, source[neighborColumn, neighborRow] );
+						GridCell<TValue> destinationCell = new( neighborColumn, neighborRow, source[neighborColumn, neighborRow] );
 
 						int destinationIndex = neighborColumn - left + ( ( neighborRow - top ) * width );
 
@@ -116,8 +116,8 @@ public sealed class GridDiffusion : IGridDiffusion {
 						continue;
 					}
 
-					GridCell<TCell> cell = new( column, row, source[column, row] );
-					TCell updated = flow.Apply( cell, delta );
+					GridCell<TValue> cell = new( column, row, source[column, row] );
+					TValue updated = flow.Apply( cell, delta );
 					destination[cell.Column, cell.Row] = updated;
 				}
 			}

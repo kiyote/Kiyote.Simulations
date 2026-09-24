@@ -10,12 +10,12 @@ public interface IGridPressure {
 	// call this once per gas species (each with its own source/destination grids), using
 	// the same connectivity grid for all of them. To advance by a larger duration, call
 	// this repeatedly, double-buffering source/destination between calls.
-	void Update<TCell, TFlow, TPressureStrategy>(
-		IGrid<TCell> source,
+	void Update<TCell, TPressure, TFlow, TPressureStrategy>(
+		IGrid<TPressure> source,
 		IConnectivityGrid<TCell> connectivity,
-		IMutableGrid<TCell> destination,
+		IMutableGrid<TPressure> destination,
 		TPressureStrategy pressure
 	)
-		where TPressureStrategy : IPressureStrategy<TCell, TFlow>;
+		where TPressureStrategy : IPressureStrategy<TPressure, TFlow>;
 
 }

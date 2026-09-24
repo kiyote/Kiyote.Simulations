@@ -20,27 +20,27 @@ public sealed class GridPressure : IGridPressure {
 		_clock = clock;
 	}
 
-	void IGridPressure.Update<TCell, TFlow, TPressureStrategy>(
-		IGrid<TCell> source,
+	void IGridPressure.Update<TCell, TPressure, TFlow, TPressureStrategy>(
+		IGrid<TPressure> source,
 		IConnectivityGrid<TCell> connectivity,
-		IMutableGrid<TCell> destination,
+		IMutableGrid<TPressure> destination,
 		TPressureStrategy pressure
 	) {
 		ArgumentNullException.ThrowIfNull( pressure );
 
-		_gridDiffusion.Update<TCell, TFlow, PressureDiffusionStrategy<TCell, TFlow, TPressureStrategy>>(
+		_gridDiffusion.Update<TCell, TPressure, TFlow, PressureDiffusionStrategy<TPressure, TFlow, TPressureStrategy>>(
 			source,
 			connectivity,
 			destination,
-			new PressureDiffusionStrategy<TCell, TFlow, TPressureStrategy>( pressure, _clock.FixedTimeStep )
+			new PressureDiffusionStrategy<TPressure, TFlow, TPressureStrategy>( pressure, _clock.FixedTimeStep )
 		);
 	}
 
 	// Adapts an IPressureStrategy, along with a fixed deltaTime, into the shape that
 	// GridDiffusion's flow algorithm expects, letting GridPressure reuse the diffusion
 	// simulation's neighbor accumulation/apply logic instead of duplicating it.
-	private readonly struct PressureDiffusionStrategy<TCell, TFlow, TPressureStrategy> : IDiffusionStrategy<TCell, TFlow>
-		where TPressureStrategy : IPressureStrategy<TCell, TFlow> {
+	private readonly struct PressureDiffusionStrategy<TPressure, TFlow, TPressureStrategy> : IDiffusionStrategy<TPressure, TFlow>
+		where TPressureStrategy : IPressureStrategy<TPressure, TFlow> {
 
 		private readonly TPressureStrategy _pressure;
 		private readonly float _deltaTime;
@@ -53,30 +53,30 @@ public sealed class GridPressure : IGridPressure {
 			_deltaTime = deltaTime;
 		}
 
-		TFlow IDiffusionStrategy<TCell, TFlow>.CalculateTransfer(
-			GridCell<TCell> source,
-			GridCell<TCell> destination,
+		TFlow IDiffusionStrategy<TPressure, TFlow>.CalculateTransfer(
+			GridCell<TPressure> source,
+			GridCell<TPressure> destination,
 			int sourceNeighborCount,
 			int destinationNeighborCount
 		) {
 			return _pressure.CalculateFlow( source, destination, sourceNeighborCount, destinationNeighborCount, _deltaTime );
 		}
 
-		TFlow IDiffusionStrategy<TCell, TFlow>.Combine(
+		TFlow IDiffusionStrategy<TPressure, TFlow>.Combine(
 			TFlow left,
 			TFlow right
 		) {
 			return _pressure.Combine( left, right );
 		}
 
-		TFlow IDiffusionStrategy<TCell, TFlow>.Negate(
+		TFlow IDiffusionStrategy<TPressure, TFlow>.Negate(
 			TFlow value
 		) {
 			return _pressure.Negate( value );
 		}
 
-		TCell IDiffusionStrategy<TCell, TFlow>.Apply(
-			GridCell<TCell> cell,
+		TPressure IDiffusionStrategy<TPressure, TFlow>.Apply(
+			GridCell<TPressure> cell,
 			TFlow delta
 		) {
 			return _pressure.Apply( cell, delta );

@@ -16,7 +16,7 @@ internal sealed class GridDiffusionVisualizer {
 	private readonly IAnimationWriter _animation;
 	private readonly IFileSystem _fileSystem;
 	private readonly IConnectivityStrategy<float> _connectivity;
-	private readonly DefaultFlowStrategy _flow;
+	private readonly FloatDiffusionStrategy _diffusionStrategy;
 	private readonly INumericBufferOperator _op;
 
 	private readonly INumericBuffer<byte> _pixels;
@@ -34,7 +34,7 @@ internal sealed class GridDiffusionVisualizer {
 		_fileSystem = fileSystem;
 		_op = op;
 		_connectivity = new AlwaysConnectedStrategy();
-		_flow = new DefaultFlowStrategy();
+		_diffusionStrategy = new FloatDiffusionStrategy();
 		_pixels = bufferFactory.Create<byte>( Size, Size, 0 );
 		_bufferFactory = bufferFactory;
 	}
@@ -55,7 +55,7 @@ internal sealed class GridDiffusionVisualizer {
 
 		using IAnimationBuilder builder = _animation.StartAnimation( fileName, TimeSpan.FromMilliseconds( 100 ) );
 		for (int frame = 0; frame < TotalFrameCount; frame++) {
-			_diffusion.Update<float, float, DefaultFlowStrategy>( input, connectivity, output, _flow );
+			_diffusion.Update<float, float, float, FloatDiffusionStrategy>( input, connectivity, output, _diffusionStrategy );
 			_op.ScaleToRange( output, _pixels );
 			builder.AddFrame( _pixels );
 			(input, output) = (output, input);

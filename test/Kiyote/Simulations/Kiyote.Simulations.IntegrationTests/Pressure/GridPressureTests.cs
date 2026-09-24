@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
 using Kiyote.Simulations.Diffusion;
+using Kiyote.Simulations.IntegrationTests;
 
 namespace Kiyote.Simulations.Pressure.IntegrationTests;
 
@@ -16,15 +17,15 @@ internal sealed class GridPressureTests {
 	private IConnectivityGrid<float> _connectivity;
 	private IMutableGrid<float> _input;
 	private IMutableGrid<float> _output;
-	private readonly TestConnectivityStrategy _connectivityStrategy;
-	private readonly TestPressureStrategy _pressureStrategy;
+	private readonly FloatConnectivityStrategy _connectivityStrategy;
+	private readonly FloatPressureStrategy _pressureStrategy;
 
 	public GridPressureTests() {
 		_diffusion = new GridDiffusion();
 		_clock = new SimulationClock();
 		_pressure = new GridPressure( _diffusion, _clock );
-		_connectivityStrategy = new TestConnectivityStrategy();
-		_pressureStrategy = new TestPressureStrategy();
+		_connectivityStrategy = new FloatConnectivityStrategy();
+		_pressureStrategy = new FloatPressureStrategy();
 	}
 
 	[SetUp]
@@ -42,7 +43,7 @@ internal sealed class GridPressureTests {
 		_input[5, 5] = 1000f;
 
 		// Act
-		_pressure.Update<float, float, TestPressureStrategy>( _input, _connectivity, _output, _pressureStrategy );
+		_pressure.Update<float, float, float, FloatPressureStrategy>( _input, _connectivity, _output, _pressureStrategy );
 
 		// ConnectivityStrategy allows orthogonal moves whenever both ends exist and are
 		// solid, and allows diagonal moves whenever at least one of the two orthogonal

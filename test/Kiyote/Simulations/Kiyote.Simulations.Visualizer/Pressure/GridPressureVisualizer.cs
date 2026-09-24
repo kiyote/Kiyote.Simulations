@@ -16,7 +16,7 @@ internal sealed class GridPressureVisualizer {
 	private readonly IAnimationWriter _animation;
 	private readonly IFileSystem _fileSystem;
 	private readonly IConnectivityStrategy<float> _connectivity;
-	private readonly DefaultPressureStrategy _flow;
+	private readonly FloatPressureStrategy _pressureStrategy;
 	private readonly INumericBufferOperator _op;
 
 	private readonly INumericBuffer<byte> _pixels;
@@ -34,7 +34,7 @@ internal sealed class GridPressureVisualizer {
 		_fileSystem = fileSystem;
 		_op = op;
 		_connectivity = new AlwaysConnectedStrategy();
-		_flow = new DefaultPressureStrategy();
+		_pressureStrategy = new FloatPressureStrategy();
 		_pixels = bufferFactory.Create<byte>( Size, Size, 0 );
 		_bufferFactory = bufferFactory;
 	}
@@ -55,7 +55,7 @@ internal sealed class GridPressureVisualizer {
 
 		using IAnimationBuilder builder = _animation.StartAnimation( fileName, TimeSpan.FromMilliseconds( 100 ) );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
-			_pressure.Update<float, float, DefaultPressureStrategy>( input, connectivity, output, _flow );
+			_pressure.Update<float, float, float, FloatPressureStrategy>( input, connectivity, output, _pressureStrategy );
 			_op.ScaleToRange( output, _pixels );
 			builder.AddFrame( _pixels );
 			(input, output) = (output, input);

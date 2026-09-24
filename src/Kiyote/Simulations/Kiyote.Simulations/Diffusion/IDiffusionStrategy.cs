@@ -2,11 +2,11 @@ using Kiyote.Geometry.Grids;
 
 namespace Kiyote.Simulations.Diffusion;
 
-public interface IDiffusionStrategy<TCell, TFlow> {
+public interface IDiffusionStrategy<TValue, TFlow> {
 
 	TFlow CalculateTransfer(
-		GridCell<TCell> source,
-		GridCell<TCell> destination,
+		GridCell<TValue> source,
+		GridCell<TValue> destination,
 		int sourceNeighborCount,
 		int destinationNeighborCount
 	);
@@ -20,8 +20,8 @@ public interface IDiffusionStrategy<TCell, TFlow> {
 		TFlow value
 	);
 
-	TCell Apply(
-		GridCell<TCell> cell,
+	TValue Apply(
+		GridCell<TValue> cell,
 		TFlow delta
 	);
 

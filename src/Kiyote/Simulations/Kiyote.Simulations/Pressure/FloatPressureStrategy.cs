@@ -1,9 +1,8 @@
 using Kiyote.Geometry.Grids;
 
-namespace Kiyote.Simulations.Pressure.IntegrationTests;
+namespace Kiyote.Simulations.Pressure;
 
-internal sealed class TestPressureStrategy : IPressureStrategy<float, float> {
-
+public sealed class FloatPressureStrategy : IPressureStrategy<float, float> {
 	float IPressureStrategy<float, float>.GetPressure(
 		float cell
 	) {
@@ -22,7 +21,7 @@ internal sealed class TestPressureStrategy : IPressureStrategy<float, float> {
 		}
 
 		float difference = source.Cell - destination.Cell;
-		return  difference / ( sourceNeighborCount + 1 )  * deltaTime;
+		return difference / ( sourceNeighborCount + 1 ) * deltaTime;
 	}
 
 	float IPressureStrategy<float, float>.Combine(

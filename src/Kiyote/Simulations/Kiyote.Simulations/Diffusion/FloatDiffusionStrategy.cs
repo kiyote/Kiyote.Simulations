@@ -1,10 +1,8 @@
 using Kiyote.Geometry.Grids;
-using Kiyote.Simulations.Diffusion;
 
-namespace Kiyote.Simulations.Visualizer.Diffusion;
+namespace Kiyote.Simulations.Diffusion;
 
-internal sealed class DefaultFlowStrategy : IDiffusionStrategy<float, float> {
-
+public sealed class FloatDiffusionStrategy : IDiffusionStrategy<float, float> {
 	float IDiffusionStrategy<float, float>.CalculateTransfer(
 		GridCell<float> source,
 		GridCell<float> destination,
@@ -38,5 +36,4 @@ internal sealed class DefaultFlowStrategy : IDiffusionStrategy<float, float> {
 	) {
 		return cell.Cell + delta;
 	}
-
 }
