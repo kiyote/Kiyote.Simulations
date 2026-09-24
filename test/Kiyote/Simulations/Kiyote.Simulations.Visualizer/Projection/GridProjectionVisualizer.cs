@@ -3,6 +3,7 @@ using Kiyote.Buffers.Numerics;
 using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
 using Kiyote.Imaging;
+using Kiyote.Simulations;
 using Kiyote.Simulations.Projection;
 
 namespace Kiyote.Simulations.Visualizer.Projection;

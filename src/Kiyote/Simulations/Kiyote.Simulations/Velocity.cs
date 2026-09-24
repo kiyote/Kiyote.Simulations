@@ -1,8 +1,8 @@
-namespace Kiyote.Simulations.Projection;
+namespace Kiyote.Simulations;
 
 // A simple 2D vector representing flow velocity at a cell. Mirrors
 // Kiyote.Simulations.Grids.Velocity but uses float components to match the
-// float-based grids used by the Diffusion/Pressure simulations.
+// float-based grids used by the Diffusion/Pressure/Projection/Advection simulations.
 public readonly struct Velocity : IEquatable<Velocity> {
 
 	public static readonly Velocity Zero = new( 0f, 0f );

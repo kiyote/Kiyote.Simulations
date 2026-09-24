@@ -1,6 +1,7 @@
 using Kiyote.Buffers;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
+using Kiyote.Simulations.Visualizer.Advection;
 using Kiyote.Simulations.Visualizer.Diffusion;
 using Kiyote.Simulations.Visualizer.Pressure;
 using Kiyote.Simulations.Visualizer.Projection;
@@ -25,7 +26,8 @@ internal sealed class Program {
 			.AddGifImaging()
 			.AddSingleton<GridDiffusionVisualizer>()
 			.AddSingleton<GridPressureVisualizer>()
-			.AddSingleton<GridProjectionVisualizer>();
+			.AddSingleton<GridProjectionVisualizer>()
+			.AddSingleton<GridAdvectionVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
@@ -37,6 +39,9 @@ internal sealed class Program {
 
 		GridProjectionVisualizer gridProjectionVisualizer = services.GetRequiredService<GridProjectionVisualizer>();
 		gridProjectionVisualizer.Execute( outputFolder );
+
+		GridAdvectionVisualizer gridAdvectionVisualizer = services.GetRequiredService<GridAdvectionVisualizer>();
+		gridAdvectionVisualizer.Execute( outputFolder );
 
 	}
 

@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Kiyote.Simulations.Advection;
 using Kiyote.Simulations.Diffusion;
 using Kiyote.Simulations.Pressure;
 using Kiyote.Simulations.Projection;
@@ -16,6 +17,7 @@ public static class ExtensionMethods {
 			.AddSingleton<ISimulationClock, SimulationClock>()
 			.AddSingleton<IGridDiffusion, GridDiffusion>()
 			.AddSingleton<IGridPressure, GridPressure>()
-			.AddSingleton<IGridProjection, GridProjection>();
+			.AddSingleton<IGridProjection, GridProjection>()
+			.AddSingleton<IGridAdvection, GridAdvection>();
 	}
 }
