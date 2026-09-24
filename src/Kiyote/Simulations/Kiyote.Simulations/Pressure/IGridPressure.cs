@@ -11,8 +11,8 @@ public interface IGridPressure {
 	// the same connectivity grid for all of them. To advance by a larger duration, call
 	// this repeatedly, double-buffering source/destination between calls.
 	void Update<TCell, TPressure, TFlow, TPressureStrategy>(
-		IGrid<TPressure> source,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<TPressure> source,
 		IMutableGrid<TPressure> destination,
 		TPressureStrategy pressure
 	)

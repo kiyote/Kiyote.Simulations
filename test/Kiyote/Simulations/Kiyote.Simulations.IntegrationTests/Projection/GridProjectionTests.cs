@@ -52,7 +52,7 @@ internal sealed class GridProjectionTests {
 		_sourcePressure[2, 5] = 1000f;
 
 		// Act
-		_projection.Update( _sourceVelocity, _connectivity, _destinationVelocity, _sourcePressure, _destinationPressure, _floatProjectionStrategy );
+		_projection.Update( _connectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _floatProjectionStrategy );
 
 		// Assert
 		using( Assert.EnterMultipleScope() ) {

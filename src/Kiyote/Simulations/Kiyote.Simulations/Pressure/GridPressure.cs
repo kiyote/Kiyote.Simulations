@@ -21,16 +21,16 @@ public sealed class GridPressure : IGridPressure {
 	}
 
 	void IGridPressure.Update<TCell, TPressure, TFlow, TPressureStrategy>(
-		IGrid<TPressure> source,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<TPressure> source,
 		IMutableGrid<TPressure> destination,
 		TPressureStrategy pressure
 	) {
 		ArgumentNullException.ThrowIfNull( pressure );
 
 		_gridDiffusion.Update<TCell, TPressure, TFlow, PressureDiffusionStrategy<TPressure, TFlow, TPressureStrategy>>(
-			source,
 			connectivity,
+			source,
 			destination,
 			new PressureDiffusionStrategy<TPressure, TFlow, TPressureStrategy>( pressure, _clock.FixedTimeStep )
 		);

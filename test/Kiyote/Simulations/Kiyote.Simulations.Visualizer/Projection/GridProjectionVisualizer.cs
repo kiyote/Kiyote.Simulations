@@ -65,7 +65,7 @@ internal sealed class GridProjectionVisualizer {
 		using IAnimationBuilder pressureBuilder = _animation.StartAnimation( pressureFileName, TimeSpan.FromMilliseconds( 100 ) );
 		using IAnimationBuilder velocityBuilder = _animation.StartAnimation( velocityFileName, TimeSpan.FromMilliseconds( 100 ) );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
-			_projection.Update( inputVelocity, connectivity, outputVelocity, inputPressure, outputPressure, _projectionStrategy );
+			_projection.Update( connectivity, inputVelocity, outputVelocity, inputPressure, outputPressure, _projectionStrategy );
 
 			_op.ScaleToRange( outputPressure, _pixels );
 			pressureBuilder.AddFrame( _pixels );

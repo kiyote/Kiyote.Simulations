@@ -6,8 +6,8 @@ namespace Kiyote.Simulations.Diffusion;
 public interface IGridDiffusion {
 
 	void Update<TCell, TValue, TFlow, TFlowStrategy>(
-		IGrid<TValue> source,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<TValue> source,
 		IMutableGrid<TValue> destination,
 		TFlowStrategy flow
 	)

@@ -55,7 +55,7 @@ internal sealed class GridDiffusionVisualizer {
 
 		using IAnimationBuilder builder = _animation.StartAnimation( fileName, TimeSpan.FromMilliseconds( 100 ) );
 		for (int frame = 0; frame < TotalFrameCount; frame++) {
-			_diffusion.Update<float, float, float, FloatDiffusionStrategy>( input, connectivity, output, _diffusionStrategy );
+			_diffusion.Update<float, float, float, FloatDiffusionStrategy>( connectivity, input, output, _diffusionStrategy );
 			_op.ScaleToRange( output, _pixels );
 			builder.AddFrame( _pixels );
 			(input, output) = (output, input);

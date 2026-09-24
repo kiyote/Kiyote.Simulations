@@ -14,8 +14,8 @@ public sealed class GridDiffusion : IGridDiffusion {
 	];
 
 	void IGridDiffusion.Update<TCell, TValue, TFlow, TFlowStrategy>(
-		IGrid<TValue> source,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<TValue> source,
 		IMutableGrid<TValue> destination,
 		TFlowStrategy flow
 	) {

@@ -43,7 +43,7 @@ internal sealed class GridPressureTests {
 		_input[5, 5] = 1000f;
 
 		// Act
-		_pressure.Update<float, float, float, FloatPressureStrategy>( _input, _connectivity, _output, _pressureStrategy );
+		_pressure.Update<float, float, float, FloatPressureStrategy>( _connectivity, _input, _output, _pressureStrategy );
 
 		// ConnectivityStrategy allows orthogonal moves whenever both ends exist and are
 		// solid, and allows diagonal moves whenever at least one of the two orthogonal

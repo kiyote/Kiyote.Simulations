@@ -38,7 +38,7 @@ public sealed class GridDiffusionTests {
 	public void Update_OneStep_OutputUpdated() {
 		_input[5, 5] = 1000f;
 
-		_diffusion.Update<float, float, float, FloatDiffusionStrategy>( _input, _connectivity, _output, _flow );
+		_diffusion.Update<float, float, float, FloatDiffusionStrategy>( _connectivity, _input, _output, _flow );
 
 		// ConnectivityStrategy allows orthogonal moves whenever both ends exist and are
 		// solid, and allows diagonal moves whenever at least one of the two orthogonal

@@ -37,8 +37,8 @@ public sealed class GridProjection : IGridProjection {
 	}
 
 	void IGridProjection.Update<TCell, TPressure, TProjectionStrategy>(
-		IGrid<Velocity> source,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<Velocity> source,
 		IMutableGrid<Velocity> destination,
 		IMutableGrid<TPressure> pressureSource,
 		IMutableGrid<TPressure> pressureDestination,
@@ -73,7 +73,7 @@ public sealed class GridProjection : IGridProjection {
 		// neighbors participate in the discrete divergence operator at each cell.
 		for( int row = top; row < top + height; row++ ) {
 			for( int column = left; column < left + width; column++ ) {
-				float divergence = CalculateDivergence( source, connectivity, column, row, left, top, width, height );
+				float divergence = CalculateDivergence( connectivity, source, column, row, left, top, width, height );
 				GridCell<TPressure> cell = new( column, row, pressureSource[column, row] );
 				pressureSource[column, row] = projection.SetDivergence( cell, divergence );
 			}
@@ -86,8 +86,8 @@ public sealed class GridProjection : IGridProjection {
 		IMutableGrid<TPressure> relaxationDestination = pressureDestination;
 		for( int i = 0; i < Iterations; i++ ) {
 			_gridPressure.Update<TCell, TPressure, float, TProjectionStrategy>(
-				relaxationSource,
 				connectivity,
+				relaxationSource,
 				relaxationDestination,
 				projection
 			);
@@ -99,15 +99,15 @@ public sealed class GridProjection : IGridProjection {
 		// source velocity field, yielding a divergence-free result.
 		for( int row = top; row < top + height; row++ ) {
 			for( int column = left; column < left + width; column++ ) {
-				Velocity gradient = CalculateGradient( relaxationSource, connectivity, projection, column, row, left, top, width, height );
+				Velocity gradient = CalculateGradient( connectivity, relaxationSource, projection, column, row, left, top, width, height );
 				destination[column, row] = source[column, row] - gradient;
 			}
 		}
 	}
 
 	private static float CalculateDivergence<TCell>(
-		IGrid<Velocity> velocity,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<Velocity> velocity,
 		int column,
 		int row,
 		int left,
@@ -136,8 +136,8 @@ public sealed class GridProjection : IGridProjection {
 	}
 
 	private static Velocity CalculateGradient<TCell, TPressure, TProjectionStrategy>(
-		IGrid<TPressure> pressure,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<TPressure> pressure,
 		TProjectionStrategy projection,
 		int column,
 		int row,

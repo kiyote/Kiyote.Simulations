@@ -32,8 +32,8 @@ public interface IGridProjection {
 	// buffer their own source/destination). Callers do not need to seed them with
 	// anything meaningful - their contents are overwritten as part of the solve.
 	void Update<TCell, TPressure, TProjectionStrategy>(
-		IGrid<Velocity> sourceVelocity,
 		IConnectivityGrid<TCell> connectivity,
+		IGrid<Velocity> sourceVelocity,
 		IMutableGrid<Velocity> destinationVelocity,
 		IMutableGrid<TPressure> pressureSource,
 		IMutableGrid<TPressure> pressureDestination,

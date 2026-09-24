@@ -55,7 +55,7 @@ internal sealed class GridPressureVisualizer {
 
 		using IAnimationBuilder builder = _animation.StartAnimation( fileName, TimeSpan.FromMilliseconds( 100 ) );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
-			_pressure.Update<float, float, float, FloatPressureStrategy>( input, connectivity, output, _pressureStrategy );
+			_pressure.Update<float, float, float, FloatPressureStrategy>( connectivity, input, output, _pressureStrategy );
 			_op.ScaleToRange( output, _pixels );
 			builder.AddFrame( _pixels );
 			(input, output) = (output, input);
