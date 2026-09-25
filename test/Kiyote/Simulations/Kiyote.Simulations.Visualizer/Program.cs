@@ -56,7 +56,6 @@ internal sealed class Program {
 		GridAdvectionVisualizer gridAdvectionVisualizer = services.GetRequiredService<GridAdvectionVisualizer>();
 		gridAdvectionVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
-
 	}
 
 }
