@@ -26,6 +26,9 @@
   <Folder Name="/src/Kiyote/Simulations/">
     <Project Path="src/Kiyote/Simulations/Kiyote.Simulations/Kiyote.Simulations.csproj" />
   </Folder>
+  <Folder Name="/src/Kiyote/Simulations/LowFidelity/">
+    <Project Path="src/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity/Kiyote.Simulations.LowFidelity.csproj" Id="d8ca505f-9ba8-4640-8a4d-b339f617b9f0" />
+  </Folder>
   <Folder Name="/test/" />
   <Folder Name="/test/Kiyote/" />
   <Folder Name="/test/Kiyote/Simulations/">

@@ -1,0 +1,341 @@
+using System;
+using System.Collections.Generic;
+
+namespace LowFiAtmosphereSim
+{
+    /// <summary>
+    /// Represents the partial gas masses and atmospheric status of a single discrete cellular node.
+    /// Packed tightly as a struct to eliminate Garbage Collection allocations and ensure CPU cache efficiency.
+    /// </summary>
+    public struct GasCell
+    {
+        /// <summary> Mass quantity of Oxygen gas (0.0 to 1.0+). </summary>
+        public float Oxygen;
+        
+        /// <summary> Mass quantity of Carbon Dioxide gas (0.0 to 1.0+). </summary>
+        public float CarbonDioxide;
+        
+        /// <summary> Mass quantity of Nitrogen gas (0.0 to 1.0+). </summary>
+        public float Nitrogen;
+        
+        /// <summary> 
+        /// Flag indicating if this cell is an exposed cosmic void or a structural hull breach.
+        /// If true, the cell continuously acts as an infinite mass sink, forcing pressure to zero.
+        /// </summary>
+        public bool IsVacuumSink;
+
+        /// <summary>
+        /// Calculates the total combined atmospheric pressure of this cell.
+        /// Vacuum cells instantly return 0.0, establishing the steep pressure drop needed for decompression flows.
+        /// </summary>
+        public readonly float TotalPressure => IsVacuumSink ? 0f : (Oxygen + CarbonDioxide + Nitrogen);
+    }
+
+    /// <summary>
+    /// Tracks the topology link configuration connecting one cell to a neighbor within the composite network.
+    /// </summary>
+    public struct CellConnection
+    {
+        /// <summary> The absolute, flattened array coordinate index of the targeted neighbor cell. </summary>
+        public int TargetCellIndex;
+        
+        /// <summary>
+        /// Maps directly to the 8 available cardinal and diagonal direction indices (0 through 7).
+        /// 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW. Used by the top-level query to map world vectors.
+        /// </summary>
+        public byte DirectionId;
+    }
+
+    /// <summary>
+    /// Records the immediate kinetic flow results calculated across a specific topology link.
+    /// </summary>
+    public struct ConnectionFlowDelta
+    {
+        /// <summary> 
+        /// The gross mass of gas transferring over this structural link during the current simulation tick.
+        /// Positive means gas is venting outward to the target; negative means it is drawing inward.
+        /// </summary>
+        public float NetFlowMass;
+    }
+
+    /// <summary>
+    /// 2D Vector coordinate optimization struct optimized for flat-space mathematical operations.
+    /// </summary>
+    public struct Vector2D
+    {
+        public float X;
+        public float Y;
+
+        public Vector2D(float x, float y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        /// <summary>
+        /// Performs an inline 2D rotation matrix transformation to shift a local sub-grid directional vector
+        /// smoothly into the consistent, top-level coordinate space of the composite parent grid.
+        /// </summary>
+        public static Vector2D Transform(Vector2D local, float rotationRadians)
+        {
+            float cos = (float)Math.Cos(rotationRadians);
+            float sin = (float)Math.Sin(rotationRadians);
+            return new Vector2D(
+                local.X * cos - local.Y * sin,
+                local.X * sin + local.Y * cos
+            );
+        }
+    }
+
+    public class LowFiAtmosphereSimManager
+    {
+        // ==========================================
+        // CONSTANTS & STATIC TABLES
+        // ==========================================
+        
+        /// <summary>
+        /// Pre-computed normalized directional unit vectors corresponding to the 8 supported topological paths.
+        /// Diagonal velocities are normalized to 0.7071f to prevent diagonal atmospheric flows from running faster.
+        /// </summary>
+        private static readonly Vector2D[] LocalDirectionsTable = new Vector2D[]
+        {
+            new Vector2D(0f, 1f),             // 0: North
+            new Vector2D(0.7071f, 0.7071f),   // 1: North-East
+            new Vector2D(1f, 0f),             // 2: East
+            new Vector2D(0.7071f, -0.7071f),  // 3: South-East
+            new Vector2D(0f, -1f),            // 4: South
+            new Vector2D(-0.7071f, -0.7071f), // 5: South-West
+            new Vector2D(-1f, 0f),            // 6: West
+            new Vector2D(-0.7071f, 0.7071f)   // 7: North-West
+        };
+
+        // ==========================================
+        // SIMULATION MEMORY FIELDS (DOUBLE-BUFFERED)
+        // ==========================================
+        private GasCell[] _currentGasGrid;
+        private GasCell[] _nextGasGrid;
+        
+        // Jagged flat pools mapping connections to cells allocation-free
+        private int[] _connectionOffsets;
+        private int[] _connectionCounts;
+        private CellConnection[] _connectionsPool;
+        private ConnectionFlowDelta[] _flowPool;
+
+        // Bounding dimensions provided by the global top-level composite framework
+        private int _totalWidth;
+        private int _totalHeight;
+        private int _boundingBoxSize;
+
+        // Configuration coefficients
+        private float _diffusionRate = 0.08f;      // MUST remain < 0.125f (1/8 neighbors) for absolute numerical stability
+        private float _decompressionRate = 0.35f;  // Accelerated choked-flow scalar used during hull breaches or vacuum contacts
+
+        /// <summary>
+        /// Initializes a new instance of the atmosphere manager inside the top-level boundary bounding box space.
+        /// </summary>
+        public void Initialize(int boundingWidth, int boundingHeight)
+        {
+            _totalWidth = boundingWidth;
+            _totalHeight = boundingHeight;
+            _boundingBoxSize = _totalWidth * _totalHeight;
+
+            // Allocation of backing flat arrays covering the entire possible composite envelope
+            _currentGasGrid = new GasCell[_boundingBoxSize];
+            _nextGasGrid = new GasCell[_boundingBoxSize];
+            
+            _connectionOffsets = new int[_boundingBoxSize];
+            _connectionCounts = new int[_boundingBoxSize];
+
+            // Maximum possible structural capacity for an 8-way grid connectivity topology
+            _connectionsPool = new CellConnection[_boundingBoxSize * 8];
+            _flowPool = new ConnectionFlowDelta[_boundingBoxSize * 8];
+        }
+
+        // ==========================================
+        // CORE CELLULAR AUTOMATA LOOP
+        // ==========================================
+
+        /// <summary>
+        /// Executes a single discrete atmospheric simulation tick across the entire active composite layout.
+        /// Processes diffusion, equalizes gases, handles vacuum mass destruction, and records airflow deltas.
+        /// </summary>
+        public void SimulationTick()
+        {
+            // First: Ensure the next state buffer mirrors our active masses before we execute shifting math
+            Array.Copy(_currentGasGrid, _nextGasGrid, _boundingBoxSize);
+
+            // Loop through every valid cell position inside our flat global bounding boundaries
+            for (int cellId = 0; cellId < _boundingBoxSize; cellId++)
+            {
+                float sourcePressure = _currentGasGrid[cellId].TotalPressure;
+                
+                // If a cell has no atmosphere or it is an active vacuum sink, it generates no outflow forces
+                if (sourcePressure <= 0.0001f || _currentGasGrid[cellId].IsVacuumSink)
+                    continue;
+
+                int offset = _connectionOffsets[cellId];
+                int count = _connectionCounts[cellId];
+
+                // Compute total actual gas mass natively available for transport
+                float totalAvailableGas = _currentGasGrid[cellId].Oxygen + 
+                                          _currentGasGrid[cellId].CarbonDioxide + 
+                                          _currentGasGrid[cellId].Nitrogen;
+
+                // Loop through this specific cell's active adjacency links provided by the connectivity grid
+                for (int i = 0; i < count; i++)
+                {
+                    int poolIndex = offset + i;
+                    CellConnection connection = _connectionsPool[poolIndex];
+                    int targetId = connection.TargetCellIndex;
+
+                    float targetPressure = _currentGasGrid[targetId].TotalPressure;
+                    float pressureDelta = sourcePressure - targetPressure;
+
+                    // Gas flows exclusively from HIGH pressure to LOW pressure
+                    if (pressureDelta > 0.001f)
+                    {
+                        float flowMass;
+
+                        // VACUUM BREACH / HIGH PRESSURE DIFFERENTIAL MATH (CHOKED FLOW CRITERIA)
+                        // If venting straight into a vacuum or across a severe structural decompression zone
+                        if (targetPressure == 0f || (pressureDelta / sourcePressure) > 0.5f)
+                        {
+                            // Utilize aggressive, high-speed flow velocity equations mimicking decompressions
+                            flowMass = sourcePressure * _decompressionRate;
+                        }
+                        else
+                        {
+                            // Standard smooth Laplacian equalization loop for internal base rooms
+                            flowMass = pressureDelta * _diffusionRate;
+                        }
+
+                        // Safety-clamp: Never shift more gas than the node physically possesses
+                        if (flowMass > totalAvailableGas)
+                            flowMass = totalAvailableGas;
+
+                        if (flowMass > 0f)
+                        {
+                            // Gas extraction tracking ratio to preserve perfect gas mix percentages during transit
+                            float separationRatio = flowMass / totalAvailableGas;
+
+                            float oxMoved = _currentGasGrid[cellId].Oxygen * separationRatio;
+                            float co2Moved = _currentGasGrid[cellId].CarbonDioxide * separationRatio;
+                            float nMoved = _currentGasGrid[cellId].Nitrogen * separationRatio;
+
+                            // Deduct the mass from the source back-buffer
+                            _nextGasGrid[cellId].Oxygen -= oxMoved;
+                            _nextGasGrid[cellId].CarbonDioxide -= co2Moved;
+                            _nextGasGrid[cellId].Nitrogen -= nMoved;
+
+                            // If the destination isn't an outer hull vacuum sink, add the mass to its back-buffer
+                            if (!_currentGasGrid[targetId].IsVacuumSink)
+                            {
+                                _nextGasGrid[targetId].Oxygen += oxMoved;
+                                _nextGasGrid[targetId].CarbonDioxide += co2Moved;
+                                _nextGasGrid[targetId].Nitrogen += nMoved;
+                            }
+
+                            // Record the structural flow scalar so our visual streaks engine can query it later
+                            _flowPool[poolIndex].NetFlowMass = flowMass;
+                        }
+                        else
+                        {
+                            _flowPool[poolIndex].NetFlowMass = 0f;
+                        }
+                    }
+                    else
+                    {
+                        // Stagnant air or reversed gradient handled by the neighboring cell's iteration pass
+                        _flowPool[poolIndex].NetFlowMass = 0f;
+                    }
+                }
+            }
+
+            // Swap our double-buffers to commit the new atmospheric states completely allocation-free
+            GasCell[] temp = _currentGasGrid;
+            _currentGasGrid = _nextGasGrid;
+            _nextGasGrid = temp;
+        }
+
+        // ==========================================
+        // SPATIAL RENDERING & VECTOR QUERY QUERIES
+        // ==========================================
+
+        /// <summary>
+        /// Computes a single, consistent global airflow velocity vector for a cell.
+        /// Resolves all individual topology flows, matches unit vectors, and maps to world-space via sub-grid rotations.
+        /// </summary>
+        /// <param name="globalCellId">The global flat index identifier of the requested node.</param>
+        /// <param name="subGridRotationRadians">The active rotation angle of the host sub-grid in world space.</param>
+        /// <returns>A transformed global vector ready to feed particle trail systems or physics forces.</returns>
+        public Vector2D ComputeGlobalVelocity(int globalCellId, float subGridRotationRadians)
+        {
+            float netLocalX = 0f;
+            float netLocalY = 0f;
+
+            int offset = _connectionOffsets[globalCellId];
+            int count = _connectionCounts[globalCellId];
+
+            // 1. Reconstruct local directional forces based on recorded topology mass movements
+            for (int i = 0; i < count; i++)
+            {
+                int poolIndex = offset + i;
+                float flow = _flowPool[poolIndex].NetFlowMass;
+
+                if (Math.Abs(flow) < 0.001f) 
+                    continue;
+
+                // Fetch the static coordinate unit vector for this connection ID (0 to 7)
+                byte dirId = _connectionsPool[poolIndex].DirectionId;
+                Vector2D directionUnit = LocalDirectionsTable[dirId];
+
+                // Accumulate velocity scalars (directional pull is implicitly directed by positive flow mass)
+                netLocalX += directionUnit.X * flow;
+                netLocalY += directionUnit.Y * flow;
+            }
+
+            Vector2D localVelocity = new Vector2D(netLocalX, netLocalY);
+
+            // 2. Perform matrix transform to map the local vector cleanly out to the top-level global display space
+            return Vector2D.Transform(localVelocity, subGridRotationRadians);
+        }
+
+        /// <summary>
+        /// Interface injector to rebuild connectivity buffers when assets like motorized doors or airlocks open/close.
+        /// Takes a clean topology description map from your framework and writes it straight to cache.
+        /// </summary>
+        public void RebuildConnectivity(Dictionary<int, List<CellConnection>> structuralTopologyMap)
+        {
+            int currentPoolOffset = 0;
+            
+            // Clear current structural trackers safely
+            Array.Clear(_connectionOffsets, 0, _boundingBoxSize);
+            Array.Clear(_connectionCounts, 0, _boundingBoxSize);
+            Array.Clear(_connectionsPool, 0, _connectionsPool.Length);
+            Array.Clear(_flowPool, 0, _flowPool.Length);
+
+            foreach (var kvp in structuralTopologyMap)
+            {
+                int cellId = kvp.Key;
+                List<CellConnection> links = kvp.Value;
+
+                if (cellId < 0 || cellId >= _boundingBoxSize || links == null || links.Count == 0)
+                    continue;
+
+                _connectionOffsets[cellId] = currentPoolOffset;
+                _connectionCounts[cellId] = links.Count;
+
+                for (int i = 0; i < links.Count; i++)
+                {
+                    _connectionsPool[currentPoolOffset + i] = links[i];
+                }
+
+                currentPoolOffset += links.Count;
+            }
+        }
+
+        // Basic accessor helpers
+        public void SetGasState(int cellId, GasCell data) => _currentGasGrid[cellId] = data;
+        public GasCell GetGasState(int cellId) => _currentGasGrid[cellId];
+    }
+}
