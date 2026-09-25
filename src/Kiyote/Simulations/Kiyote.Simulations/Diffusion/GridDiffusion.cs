@@ -109,6 +109,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 					int index = column - left + ( ( row - top ) * width );
 					TFlow delta = deltas[index];
 					if( comparer.Equals( delta, default ) ) {
+						destination[column, row] = source[column, row];
 						continue;
 					}
 

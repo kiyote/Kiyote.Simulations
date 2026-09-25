@@ -15,7 +15,7 @@ internal sealed class GridAdvectionVisualizer {
 	private readonly IGridAdvection _advection;
 	private readonly IAnimationWriter _animation;
 	private readonly IFileSystem _fileSystem;
-	private readonly AlwaysConnectedStrategy _connectivityStrategy;
+	private readonly OpenFloatConnectivityStrategy _connectivityStrategy;
 	private readonly FloatBilinearSampler _sampler;
 	private readonly INumericBufferOperator _op;
 
@@ -33,7 +33,7 @@ internal sealed class GridAdvectionVisualizer {
 		_animation = animationWriter;
 		_fileSystem = fileSystem;
 		_op = op;
-		_connectivityStrategy = new AlwaysConnectedStrategy();
+		_connectivityStrategy = new OpenFloatConnectivityStrategy();
 		_sampler = new FloatBilinearSampler();
 		_pixels = bufferFactory.Create<byte>( Size, Size, 0 );
 		_bufferFactory = bufferFactory;

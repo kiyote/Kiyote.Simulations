@@ -20,4 +20,4 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # GridProjection
 | Method | Mean     | Error    | StdDev   | Allocated |
 |------- |---------:|---------:|---------:|----------:|
-| Update | 22.95 ms | 0.375 ms | 0.333 ms |         - |
+| Update | 24.59 ms | 0.904 ms | 0.846 ms |         - |

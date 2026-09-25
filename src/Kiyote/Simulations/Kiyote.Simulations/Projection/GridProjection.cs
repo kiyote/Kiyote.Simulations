@@ -65,6 +65,9 @@ public sealed class GridProjection : IGridProjection {
 		// neighbors participate in the discrete divergence operator at each cell.
 		for( int row = top; row < top + height; row++ ) {
 			for( int column = left; column < left + width; column++ ) {
+				if( connectivity[column, row] == Direction.None ) {
+					continue;
+				}
 				float divergence = CalculateDivergence( connectivity, source, column, row, left, top, width, height );
 				GridCell<TPressure> cell = new( column, row, pressureSource[column, row] );
 				pressureSource[column, row] = projection.SetDivergence( cell, divergence );
@@ -91,6 +94,10 @@ public sealed class GridProjection : IGridProjection {
 		// source velocity field, yielding a divergence-free result.
 		for( int row = top; row < top + height; row++ ) {
 			for( int column = left; column < left + width; column++ ) {
+				if( connectivity[column, row] == Direction.None ) {
+					destination[column, row] = source[column, row];
+					continue;
+				}
 				Velocity gradient = CalculateGradient( connectivity, relaxationSource, projection, column, row, left, top, width, height );
 				destination[column, row] = source[column, row] - gradient;
 			}
@@ -108,23 +115,52 @@ public sealed class GridProjection : IGridProjection {
 		int height
 	) {
 		float divergence = 0f;
-		int neighborCount = 0;
 		Velocity sourceVelocity = velocity[column, row];
 		Direction sourceConnectivity = connectivity[column, row];
 
 		foreach( (int deltaColumn, int deltaRow, Direction direction, float unitX, float unitY) in _neighborDeltas ) {
-			if( TryGetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow ) ) {
-				Velocity neighborVelocity = velocity[neighborColumn, neighborRow];
-				divergence += ( ( neighborVelocity.X - sourceVelocity.X ) * unitX ) + ( ( neighborVelocity.Y - sourceVelocity.Y ) * unitY );
-				neighborCount++;
-			}
+			Velocity neighborVelocity = GetNeighborOrReflectedVelocity(
+				connectivity, velocity, sourceConnectivity, sourceVelocity, direction,
+				column, row, deltaColumn, deltaRow, unitX, unitY, left, top, width, height
+			);
+			divergence += ( ( neighborVelocity.X - sourceVelocity.X ) * unitX ) + ( ( neighborVelocity.Y - sourceVelocity.Y ) * unitY );
 		}
 
-		if( neighborCount == 0 ) {
-			return 0f;
+		return divergence / _neighborDeltas.Length;
+	}
+
+	// Returns the neighbor's actual velocity when the edge is open, or, when the edge is
+	// blocked (either by an impassable neighbor or the boundary of the domain), a reflected
+	// "ghost" velocity: the source cell's own velocity with its component normal to the wall
+	// negated (no-penetration) while its tangential component is preserved (free-slip). This
+	// treats every wall/edge uniformly as a solid boundary rather than simply omitting it from
+	// the divergence average.
+	private static Velocity GetNeighborOrReflectedVelocity<TCell>(
+		IConnectivityGrid<TCell> connectivity,
+		IGrid<Velocity> velocity,
+		Direction sourceConnectivity,
+		Velocity sourceVelocity,
+		Direction direction,
+		int column,
+		int row,
+		int deltaColumn,
+		int deltaRow,
+		float unitX,
+		float unitY,
+		int left,
+		int top,
+		int width,
+		int height
+	) {
+		if( TryGetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow ) ) {
+			return velocity[neighborColumn, neighborRow];
 		}
 
-		return divergence / neighborCount;
+		float normalComponent = ( sourceVelocity.X * unitX ) + ( sourceVelocity.Y * unitY );
+		return new Velocity(
+			sourceVelocity.X - ( 2f * normalComponent * unitX ),
+			sourceVelocity.Y - ( 2f * normalComponent * unitY )
+		);
 	}
 
 	private static Velocity CalculateGradient<TCell, TPressure, TProjectionStrategy>(
@@ -141,26 +177,27 @@ public sealed class GridProjection : IGridProjection {
 		where TProjectionStrategy : IProjectionStrategy<TPressure> {
 		float gradientX = 0f;
 		float gradientY = 0f;
-		int neighborCount = 0;
 		float sourcePressure = projection.GetPressure( pressure[column, row]! );
 		Direction sourceConnectivity = connectivity[column, row];
 
 		foreach( (int deltaColumn, int deltaRow, Direction direction, float unitX, float unitY) in _neighborDeltas ) {
+			// A blocked edge (wall or domain boundary) is treated as a zero-gradient (Neumann)
+			// boundary: the "ghost" pressure across the wall is reflected to equal the source
+			// cell's own pressure, contributing no gradient in that direction rather than being
+			// omitted from the average.
+			float neighborPressure = sourcePressure;
 			if( TryGetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow ) ) {
-				float neighborPressure = projection.GetPressure( pressure[neighborColumn, neighborRow]! );
-				float delta = neighborPressure - sourcePressure;
-				gradientX += delta * unitX;
-				gradientY += delta * unitY;
-				neighborCount++;
+				neighborPressure = projection.GetPressure( pressure[neighborColumn, neighborRow]! );
 			}
+
+			float delta = neighborPressure - sourcePressure;
+			gradientX += delta * unitX;
+			gradientY += delta * unitY;
 		}
 
-		if( neighborCount == 0 ) {
-			return Velocity.Zero;
-		}
-
-		return new Velocity( gradientX / neighborCount, gradientY / neighborCount );
+		return new Velocity( gradientX / _neighborDeltas.Length, gradientY / _neighborDeltas.Length );
 	}
+
 
 	private static bool TryGetNeighbor(
 		Direction sourceConnectivity,

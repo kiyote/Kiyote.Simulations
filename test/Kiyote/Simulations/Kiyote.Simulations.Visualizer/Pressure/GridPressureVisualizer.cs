@@ -33,7 +33,7 @@ internal sealed class GridPressureVisualizer {
 		_animation = animationWriter;
 		_fileSystem = fileSystem;
 		_op = op;
-		_connectivity = new AlwaysConnectedStrategy();
+		_connectivity = new OpenFloatConnectivityStrategy();
 		_pressureStrategy = new FloatPressureStrategy();
 		_pixels = bufferFactory.Create<byte>( Size, Size, 0 );
 		_bufferFactory = bufferFactory;

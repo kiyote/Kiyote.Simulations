@@ -26,22 +26,36 @@ internal sealed class Program {
 			.AddGifImaging()
 			.AddSingleton<GridDiffusionVisualizer>()
 			.AddSingleton<GridPressureVisualizer>()
-			.AddSingleton<GridProjectionVisualizer>()
+			.AddSingleton<OpenGridProjectionVisualizer>()
+			.AddSingleton<BoundaryGridProjectionVisualizer>()
 			.AddSingleton<GridAdvectionVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
+		Console.Write( "Diffusion..." );
 		GridDiffusionVisualizer gridDiffusionVisualizer = services.GetRequiredService<GridDiffusionVisualizer>();
 		gridDiffusionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
 
+		Console.Write( "Pressure..." );
 		GridPressureVisualizer gridPressureVisualizer = services.GetRequiredService<GridPressureVisualizer>();
 		gridPressureVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+		
+		Console.Write( "Open Grid Projection..." );
+		OpenGridProjectionVisualizer openProjectionVisualizer = services.GetRequiredService<OpenGridProjectionVisualizer>();
+		openProjectionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
 
-		GridProjectionVisualizer gridProjectionVisualizer = services.GetRequiredService<GridProjectionVisualizer>();
-		gridProjectionVisualizer.Execute( outputFolder );
+		Console.Write( "Boundary Grid Projection..." );
+		BoundaryGridProjectionVisualizer boundaryProjectionVisualizer = services.GetRequiredService<BoundaryGridProjectionVisualizer>();
+		boundaryProjectionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
 
+		Console.Write( "Grid Advection..." );
 		GridAdvectionVisualizer gridAdvectionVisualizer = services.GetRequiredService<GridAdvectionVisualizer>();
 		gridAdvectionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
 
 	}
 

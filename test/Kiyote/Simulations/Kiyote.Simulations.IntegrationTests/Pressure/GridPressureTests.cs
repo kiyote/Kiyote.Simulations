@@ -17,14 +17,14 @@ internal sealed class GridPressureTests {
 	private IConnectivityGrid<float> _connectivity;
 	private IMutableGrid<float> _input;
 	private IMutableGrid<float> _output;
-	private readonly FloatConnectivityStrategy _connectivityStrategy;
+	private readonly OpenFloatConnectivityStrategy _connectivityStrategy;
 	private readonly FloatPressureStrategy _pressureStrategy;
 
 	public GridPressureTests() {
 		_diffusion = new GridDiffusion();
 		_clock = new SimulationClock();
 		_pressure = new GridPressure( _diffusion, _clock );
-		_connectivityStrategy = new FloatConnectivityStrategy();
+		_connectivityStrategy = new OpenFloatConnectivityStrategy();
 		_pressureStrategy = new FloatPressureStrategy();
 	}
 

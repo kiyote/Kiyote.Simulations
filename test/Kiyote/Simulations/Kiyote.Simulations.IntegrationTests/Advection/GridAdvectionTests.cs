@@ -11,7 +11,7 @@ internal sealed class GridAdvectionTests {
 
 	private readonly ISimulationClock _clock;
 	private readonly IGridAdvection _advection;
-	private readonly FloatConnectivityStrategy _connectivityStrategy;
+	private readonly OpenFloatConnectivityStrategy _connectivityStrategy;
 	private readonly FloatBilinearSampler _sampler;
 	private IConnectivityGrid<float> _connectivity;
 	private IMutableGrid<Velocity> _velocityGrid;
@@ -21,7 +21,7 @@ internal sealed class GridAdvectionTests {
 	public GridAdvectionTests() {
 		_clock = new SimulationClock();
 		_advection = new GridAdvection( _clock );
-		_connectivityStrategy = new FloatConnectivityStrategy();
+		_connectivityStrategy = new OpenFloatConnectivityStrategy();
 		_sampler = new FloatBilinearSampler();
 	}
 
