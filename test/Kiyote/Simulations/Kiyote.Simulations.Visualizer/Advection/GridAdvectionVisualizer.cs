@@ -45,7 +45,7 @@ internal sealed class GridAdvectionVisualizer {
 		string concentrationFileName = _fileSystem.Path.Combine( outputFolder, "advection.gif" );
 		BufferGrid<float> inputConcentration = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> outputConcentration = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
-		ArrayGrid<Velocity> velocity = new ArrayGrid<Velocity>( Size, Size );
+		RaggedArrayGrid<Velocity> velocity = new RaggedArrayGrid<Velocity>( Size, Size );
 		IConnectivityGrid<float> connectivity = new ConnectivityGrid<float>();
 		connectivity.TryAttach( inputConcentration, 0, 0 );
 		connectivity.UpdateConnectivity( _connectivityStrategy );

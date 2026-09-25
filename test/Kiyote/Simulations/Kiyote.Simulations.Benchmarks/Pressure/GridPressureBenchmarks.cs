@@ -23,8 +23,8 @@ public class GridPressureBenchmarks {
 		_diffusion = new GridDiffusion();
 		_pressureStrategy = new FloatPressureStrategy();
 		_pressure = new GridPressure( _diffusion, _clock );
-		_input = new ArrayGrid<float>( 100, 100 );
-		_output = new ArrayGrid<float>( 100, 100 );
+		_input = new RaggedArrayGrid<float>( 100, 100 );
+		_output = new RaggedArrayGrid<float>( 100, 100 );
 		for( int r = 0; r < 100; r++ ) {
 			_input[0, r] = 100f;
 		}

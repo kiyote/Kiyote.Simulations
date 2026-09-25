@@ -3,6 +3,7 @@ using Kiyote.Geometry.Grids.Connectivity;
 using Kiyote.Simulations.Diffusion;
 using Kiyote.Simulations.Pressure;
 using Kiyote.Simulations.Projection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Kiyote.Simulations.Benchmarks.Projection;
 
@@ -29,10 +30,10 @@ public class GridProjectionBenchmarks {
 		_diffusion = new GridDiffusion();
 		_pressure = new GridPressure( _diffusion, _clock );
 		_projection = new GridProjection( _pressure );
-		_inputPressure = new ArrayGrid<float>( 100, 100 );
-		_outputPressure = new ArrayGrid<float>( 100, 100 );
-		_inputVelocity = new ArrayGrid<Velocity>( 100, 100 );
-		_outputVelocity = new ArrayGrid<Velocity>( 100, 100 );
+		_inputPressure = new RaggedArrayGrid<float>( 100, 100 );
+		_outputPressure = new RaggedArrayGrid<float>( 100, 100 );
+		_inputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
+		_outputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
 		for( int r = 0; r < 100; r++ ) {
 			_inputPressure[0, r] = 100f;
 			_inputVelocity[0, r] = new Velocity( 100f, 0f );

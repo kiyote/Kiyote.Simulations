@@ -28,9 +28,9 @@ internal sealed class GridAdvectionTests {
 	[SetUp]
 	public void SetUp() {
 		_connectivity = new ConnectivityGrid<float>();
-		_velocityGrid = new ArrayGrid<Velocity>( 10, 10 );
-		_input = new ArrayGrid<float>( 10, 10 );
-		_output = new ArrayGrid<float>( 10, 10 );
+		_velocityGrid = new RaggedArrayGrid<Velocity>( 10, 10 );
+		_input = new RaggedArrayGrid<float>( 10, 10 );
+		_output = new RaggedArrayGrid<float>( 10, 10 );
 
 		_connectivity.TryAttach( _input, 0, 0 );
 		_connectivity.UpdateConnectivity( _connectivityStrategy );

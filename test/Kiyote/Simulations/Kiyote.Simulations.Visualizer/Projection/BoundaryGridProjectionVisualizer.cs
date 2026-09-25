@@ -53,8 +53,8 @@ internal sealed class BoundaryGridProjectionVisualizer {
 		BufferGrid<float> outputPressure = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> velocityMagnitude = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		IMutableGrid<float> velocityGrid = velocityMagnitude;
-		ArrayGrid<Velocity> inputVelocity = new ArrayGrid<Velocity>( 100, 100 );
-		ArrayGrid<Velocity> outputVelocity = new ArrayGrid<Velocity>( 100, 100 );
+		RaggedArrayGrid<Velocity> inputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
+		RaggedArrayGrid<Velocity> outputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
 		IConnectivityGrid<float> connectivity = new ConnectivityGrid<float>();
 		connectivity.TryAttach( inputPressure, 0, 0 );
 		connectivity.UpdateConnectivity( _connectivityStrategy );

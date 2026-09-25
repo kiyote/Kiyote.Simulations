@@ -42,10 +42,10 @@ internal sealed class GridProjectionTests {
 
 	[SetUp]
 	public void SetUp() {
-		_sourceVelocity = new ArrayGrid<Velocity>( 10, 10 );
-		_destinationVelocity = new ArrayGrid<Velocity>( 10, 10 );
-		_sourcePressure = new ArrayGrid<float>( 10, 10 );
-		_destinationPressure = new ArrayGrid<float>( 10, 10 );
+		_sourceVelocity = new RaggedArrayGrid<Velocity>( 10, 10 );
+		_destinationVelocity = new RaggedArrayGrid<Velocity>( 10, 10 );
+		_sourcePressure = new RaggedArrayGrid<float>( 10, 10 );
+		_destinationPressure = new RaggedArrayGrid<float>( 10, 10 );
 
 		_openConnectivity = new ConnectivityGrid<float>();
 		_openConnectivity.TryAttach( _sourcePressure, 0, 0 );
@@ -164,13 +164,13 @@ internal sealed class GridProjectionTests {
 		BoundaryFloatConnectivityStrategy visualizerConnectivityStrategy = new( 0, 0, size, size );
 		IConnectivityGrid<float> visualizerConnectivity = new ConnectivityGrid<float>();
 
-		IMutableGrid<float> sourcePressure = new ArrayGrid<float>( size, size );
-		IMutableGrid<float> destinationPressure = new ArrayGrid<float>( size, size );
+		IMutableGrid<float> sourcePressure = new RaggedArrayGrid<float>( size, size );
+		IMutableGrid<float> destinationPressure = new RaggedArrayGrid<float>( size, size );
 		visualizerConnectivity.TryAttach( sourcePressure, 0, 0 );
 		visualizerConnectivity.UpdateConnectivity( visualizerConnectivityStrategy );
 
-		IMutableGrid<Velocity> sourceVelocity = new ArrayGrid<Velocity>( size, size );
-		IMutableGrid<Velocity> destinationVelocity = new ArrayGrid<Velocity>( size, size );
+		IMutableGrid<Velocity> sourceVelocity = new RaggedArrayGrid<Velocity>( size, size );
+		IMutableGrid<Velocity> destinationVelocity = new RaggedArrayGrid<Velocity>( size, size );
 
 		sourcePressure[95, 5] = 1000f;
 		sourcePressure[50, 50] = 1000f;

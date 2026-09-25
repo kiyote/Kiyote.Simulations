@@ -20,8 +20,8 @@ internal sealed class Program {
 
 		IServiceCollection collection = new ServiceCollection();
 		collection
-			.AddBuffers()
-			.AddNumericBuffers()
+			.AddRaggedBuffers()
+			.AddRaggedNumericBuffers()
 			.AddSimulations()
 			.AddGifImaging()
 			.AddSingleton<GridDiffusionVisualizer>()

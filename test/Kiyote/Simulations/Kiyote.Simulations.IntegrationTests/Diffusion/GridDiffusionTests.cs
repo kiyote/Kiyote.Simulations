@@ -34,8 +34,8 @@ public sealed class GridDiffusionTests {
 	[SetUp]
 	public void SetUp() {
 		_openConnectivity = new ConnectivityGrid<float>();
-		_input = new ArrayGrid<float>( 10, 10 );
-		_output = new ArrayGrid<float>( 10, 10 );
+		_input = new RaggedArrayGrid<float>( 10, 10 );
+		_output = new RaggedArrayGrid<float>( 10, 10 );
 		_openConnectivity.TryAttach( _input, 0, 0 );
 		_openConnectivity.UpdateConnectivity( _openConnectivityStrategy );
 
