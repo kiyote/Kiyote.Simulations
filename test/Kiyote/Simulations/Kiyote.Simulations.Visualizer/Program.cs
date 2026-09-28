@@ -33,7 +33,8 @@ internal sealed class Program {
 			.AddSingleton<Vectorized.Diffusion.GridDiffusionVisualizer>()
 			.AddSingleton<Vectorized.Pressure.GridPressureVisualizer>()
 			.AddSingleton<Vectorized.Projection.GridProjectionVisualizer>()
-			.AddSingleton<Vectorized.Advection.GridAdvectionVisualizer>();
+			.AddSingleton<Vectorized.Advection.GridAdvectionVisualizer>()
+			.AddSingleton<Vectorized.Airflow.GridAirflowVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
@@ -77,12 +78,14 @@ internal sealed class Program {
 		vectorizedAdvectionVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 
-		/*
-		Console.Write( "Grid Airflow..." );
+		Console.Write( "Airflow..." );
 		GridAirflowVisualizer gridAirflowVisualizer = services.GetRequiredService<GridAirflowVisualizer>();
 		gridAirflowVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
-		*/
+		Console.Write( "Vectorized Airflow..." );
+		Vectorized.Airflow.GridAirflowVisualizer vectorizedAirflowVisualizer = services.GetRequiredService<Vectorized.Airflow.GridAirflowVisualizer>();
+		vectorizedAirflowVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
 	}
 
 }

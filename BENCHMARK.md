@@ -46,3 +46,13 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 | Method | Mean     | Error    | StdDev   | Allocated |
 |------- |---------:|---------:|---------:|----------:|
 | Update | 75.73 us | 2.962 us | 2.770 us |       1 B |
+
+# GridAirflow
+| Method | Mean     | Error    | StdDev   | Allocated |
+|------- |---------:|---------:|---------:|----------:|
+| Update | 20.89 ms | 0.459 ms | 0.384 ms |         - |
+
+# Vectorized.GridAirflow
+| Method | Mean     | Error     | StdDev    | Allocated |
+|------- |---------:|----------:|----------:|----------:|
+| Update | 1.425 ms | 0.0316 ms | 0.0296 ms |      10 B |

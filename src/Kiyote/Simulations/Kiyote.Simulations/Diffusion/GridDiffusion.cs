@@ -47,7 +47,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 					Direction sourceConnectivity = connectivity[column, row];
 
 					foreach( (int deltaColumn, int deltaRow, Direction direction) in _edgeDeltas ) {
-						if( !sourceConnectivity.HasFlag( direction ) ) {
+						if( ( sourceConnectivity & direction ) != direction ) {
 							continue;
 						}
 
@@ -76,7 +76,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 					Direction sourceConnectivity = connectivity[column, row];
 
 					foreach( (int deltaColumn, int deltaRow, Direction direction) in _edgeDeltas ) {
-						if( !sourceConnectivity.HasFlag( direction ) ) {
+						if( ( sourceConnectivity & direction ) != direction ) {
 							continue;
 						}
 

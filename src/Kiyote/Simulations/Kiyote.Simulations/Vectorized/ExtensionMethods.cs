@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Simulations.Vectorized.Advection;
+using Kiyote.Simulations.Vectorized.Airflow;
 using Kiyote.Simulations.Vectorized.Diffusion;
 using Kiyote.Simulations.Vectorized.Pressure;
 using Kiyote.Simulations.Vectorized.Projection;
@@ -21,6 +22,7 @@ public static class ExtensionMethods {
 			.AddSingleton<IGridDiffusion, GridDiffusion>()
 			.AddSingleton<IGridPressure, GridPressure>()
 			.AddSingleton<IGridProjection, GridProjection>()
-			.AddSingleton<IGridAdvection, GridAdvection>();
+			.AddSingleton<IGridAdvection, GridAdvection>()
+			.AddSingleton<IGridAirflow, GridAirflow>();
 	}
 }
