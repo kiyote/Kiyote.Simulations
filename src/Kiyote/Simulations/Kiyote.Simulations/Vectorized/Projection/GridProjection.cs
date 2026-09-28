@@ -11,67 +11,46 @@ namespace Kiyote.Simulations.Vectorized.Projection;
 //   - A flagged direction with an in-leaf cell or a seam behind it is a neighbour.
 //   - A flagged direction with nothing behind it is open: zero (Dirichlet) pressure and
 //     zero-gradient outflow velocity.
-// The neighbour layout is resolved once per topology into a table; the Jacobi solve over
+// The caller-owned ProjectionNeighbourhood resolves the neighbour layout once per topology;
+// the Jacobi solve over
 // leaf interiors (where every neighbour is in-leaf) is vectorized.
 public sealed class GridProjection : IGridProjection {
 
 	// See the non-vectorized GridProjection for the derivation of this constant.
 	private const float PoissonScale = 8.235294f;
 
-	private const int Wall = -1;
-	private const int Outside = -2;
-	private const int DirectionCount = 8;
+	private const int Wall = ProjectionNeighbourhood<object>.Wall;
+	private const int Outside = ProjectionNeighbourhood<object>.Outside;
+	private const int DirectionCount = ProjectionNeighbourhood<object>.DirectionCount;
 	private const float Diagonal = 0.7071068f;
 
-	private static readonly Direction[] _directions = [
-		Direction.North,
-		Direction.NorthEast,
-		Direction.East,
-		Direction.SouthEast,
-		Direction.South,
-		Direction.SouthWest,
-		Direction.West,
-		Direction.NorthWest
-	];
-	private static readonly int[] _deltaColumns = [ 0, 1, 1, 1, 0, -1, -1, -1 ];
-	private static readonly int[] _deltaRows = [ -1, -1, 0, 1, 1, 1, 0, -1 ];
 	private static readonly float[] _unitX = [ 0f, Diagonal, 1f, Diagonal, 0f, -Diagonal, -1f, -Diagonal ];
 	private static readonly float[] _unitY = [ -1f, -Diagonal, 0f, Diagonal, 1f, Diagonal, 0f, -Diagonal ];
 
 	private readonly int _iterations;
 
-	private object? _topology;
-	private int[] _neighbours;
-	private float[] _rhs;
-
 	public GridProjection(
 		IGridProjectionSettings settings
 	) {
 		_iterations = settings.Iterations;
-		_neighbours = [];
-		_rhs = [];
 	}
 
 	void IGridProjection.Update<TCell>(
+		ProjectionNeighbourhood<TCell> neighbourhood,
 		Field<TCell> sourceVelocityX,
 		Field<TCell> sourceVelocityY,
 		Field<TCell> destinationVelocityX,
 		Field<TCell> destinationVelocityY,
 		Field<TCell> pressure,
-		Field<TCell> pressureScratch
+		Field<TCell> pressureScratch,
+		Field<TCell> divergence
 	) {
-		GridTopology<TCell> topology = sourceVelocityX.Topology;
-		if( !ReferenceEquals( _topology, topology ) ) {
-			_neighbours = BuildNeighbours( topology );
-			_rhs = new float[topology.CellCount];
-			_topology = topology;
-		}
-
-		ReadOnlySpan<int> neighbours = _neighbours;
+		GridTopology<TCell> topology = neighbourhood.Topology;
+		ReadOnlySpan<int> neighbours = neighbourhood.Neighbours;
 		ReadOnlySpan<Direction> cells = topology.Cells;
 		ReadOnlySpan<float> vx = sourceVelocityX.Values;
 		ReadOnlySpan<float> vy = sourceVelocityY.Values;
-		Span<float> rhs = _rhs;
+		Span<float> rhs = divergence.Values;
 
 		CalculateDivergence( neighbours, cells, vx, vy, rhs );
 
@@ -246,46 +225,6 @@ public sealed class GridProjection : IGridProjection {
 			destinationX[index] = vx[index] - ( gradientX / DirectionCount );
 			destinationY[index] = vy[index] - ( gradientY / DirectionCount );
 		}
-	}
-
-	private static int[] BuildNeighbours<TCell>(
-		GridTopology<TCell> topology
-	) {
-		int[] neighbours = new int[topology.CellCount * DirectionCount];
-		ReadOnlySpan<Direction> cells = topology.Cells;
-		foreach( TopologyLeaf<TCell> leaf in topology.Leaves ) {
-			for( int row = 0; row < leaf.Height; row++ ) {
-				for( int column = 0; column < leaf.Width; column++ ) {
-					int index = leaf.Offset + ( row * leaf.Width ) + column;
-					Direction flags = cells[index];
-					for( int d = 0; d < DirectionCount; d++ ) {
-						int slot = ( index * DirectionCount ) + d;
-						if( ( flags & _directions[d] ) == 0 ) {
-							neighbours[slot] = Wall;
-							continue;
-						}
-						int neighbourColumn = column + _deltaColumns[d];
-						int neighbourRow = row + _deltaRows[d];
-						neighbours[slot] = neighbourColumn >= 0 && neighbourColumn < leaf.Width && neighbourRow >= 0 && neighbourRow < leaf.Height
-							? leaf.Offset + ( neighbourRow * leaf.Width ) + neighbourColumn
-							: Outside;
-					}
-				}
-			}
-		}
-
-		foreach( SeamLink seam in topology.Seams ) {
-			int d = Array.IndexOf( _directions, seam.Direction );
-			if( d < 0 ) {
-				continue;
-			}
-			int slot = ( seam.Index * DirectionCount ) + d;
-			if( neighbours[slot] == Outside ) {
-				neighbours[slot] = seam.NeighbourIndex;
-			}
-		}
-
-		return neighbours;
 	}
 
 }

@@ -13,10 +13,12 @@ public class GridAirflowBenchmarks {
 
 	private readonly IGridAirflow _airflow;
 	private readonly AdvectionNeighbourhood<float> _neighbourhood;
+	private readonly ProjectionNeighbourhood<float> _projectionNeighbourhood;
 	private readonly Field<float> _intermediateVelocityX;
 	private readonly Field<float> _intermediateVelocityY;
 	private readonly Field<float> _projectionPressure;
 	private readonly Field<float> _projectionPressureScratch;
+	private readonly Field<float> _projectionDivergence;
 	private Field<float> _inputPressure;
 	private Field<float> _outputPressure;
 	private Field<float> _inputVelocityX;
@@ -42,10 +44,12 @@ public class GridAirflowBenchmarks {
 		GridTopology<float> topology = connectivity.BuildTopology();
 
 		_neighbourhood = new AdvectionNeighbourhood<float>( topology );
+		_projectionNeighbourhood = new ProjectionNeighbourhood<float>( topology );
 		_intermediateVelocityX = new Field<float>( topology );
 		_intermediateVelocityY = new Field<float>( topology );
 		_projectionPressure = new Field<float>( topology );
 		_projectionPressureScratch = new Field<float>( topology );
+		_projectionDivergence = new Field<float>( topology );
 		_inputPressure = new Field<float>( topology );
 		_outputPressure = new Field<float>( topology );
 		_inputVelocityX = new Field<float>( topology );
@@ -65,11 +69,12 @@ public class GridAirflowBenchmarks {
 	public void Update() {
 		_airflow.Update(
 			_neighbourhood,
+			_projectionNeighbourhood,
 			_inputPressure, _outputPressure,
 			_inputVelocityX, _inputVelocityY,
 			_outputVelocityX, _outputVelocityY,
 			_intermediateVelocityX, _intermediateVelocityY,
-			_projectionPressure, _projectionPressureScratch,
+			_projectionPressure, _projectionPressureScratch, _projectionDivergence,
 			_inputConcentration, _outputConcentration
 		);
 		(_inputPressure, _outputPressure) = (_outputPressure, _inputPressure);

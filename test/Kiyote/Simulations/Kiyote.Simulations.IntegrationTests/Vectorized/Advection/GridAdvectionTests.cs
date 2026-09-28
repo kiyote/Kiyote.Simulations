@@ -121,14 +121,17 @@ public sealed class GridAdvectionTests {
 	}
 
 	[Test]
-	public void Update_LargeVelocity_DisplacementClampedToOneCell() {
+	public void Update_MultiCellDisplacement_CarriedFullDistance() {
 		Fields fields = Create( new OpenFloatConnectivityStrategy() );
-		fields.VelocityX.Values.Fill( 1000f );
+		fields.VelocityX.Values.Fill( 20f );
 		fields.Source.Values[Index( 3, 5 )] = 1000f;
 
 		_advection.Update( fields.Neighbourhood, fields.VelocityX, fields.VelocityY, fields.Source, fields.Destination );
 
-		Assert.That( fields.Destination.Values[Index( 4, 5 )], Is.EqualTo( 1000f ).Within( 1e-4f ) );
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( fields.Destination.Values[Index( 5, 5 )], Is.EqualTo( 1000f ).Within( 1e-4f ) );
+			Assert.That( fields.Destination.Values[Index( 4, 5 )], Is.Zero );
+		}
 	}
 
 	private static int Index( int column, int row ) => ( row * Size ) + column;

@@ -75,6 +75,7 @@ internal sealed class GridAirflowVisualizer {
 		GridTopology<float> topology = connectivity.BuildTopology();
 
 		AdvectionNeighbourhood<float> neighbourhood = new AdvectionNeighbourhood<float>( topology );
+		ProjectionNeighbourhood<float> projectionNeighbourhood = new ProjectionNeighbourhood<float>( topology );
 		Field<float> inputPressure = new Field<float>( topology );
 		Field<float> outputPressure = new Field<float>( topology );
 		Field<float> inputVelocityX = new Field<float>( topology );
@@ -85,6 +86,7 @@ internal sealed class GridAirflowVisualizer {
 		Field<float> intermediateVelocityY = new Field<float>( topology );
 		Field<float> projectionPressure = new Field<float>( topology );
 		Field<float> projectionPressureScratch = new Field<float>( topology );
+		Field<float> projectionDivergence = new Field<float>( topology );
 		Field<float> inputConcentration = new Field<float>( topology );
 		Field<float> outputConcentration = new Field<float>( topology );
 		Field<float> velocityMagnitude = new Field<float>( topology );
@@ -98,11 +100,12 @@ internal sealed class GridAirflowVisualizer {
 
 				_airflow.Update(
 					neighbourhood,
+					projectionNeighbourhood,
 					inputPressure, outputPressure,
 					inputVelocityX, inputVelocityY,
 					outputVelocityX, outputVelocityY,
 					intermediateVelocityX, intermediateVelocityY,
-					projectionPressure, projectionPressureScratch,
+					projectionPressure, projectionPressureScratch, projectionDivergence,
 					inputConcentration, outputConcentration
 				);
 

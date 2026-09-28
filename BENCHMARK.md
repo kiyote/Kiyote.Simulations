@@ -40,12 +40,12 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # GridAdvection
 | Method | Mean     | Error   | StdDev  | Allocated |
 |------- |---------:|--------:|--------:|----------:|
-| Update | 379.7 us | 8.61 us | 7.64 us |         - |
+| Update | 339.9 us | 7.92 us | 7.41 us |         - |
 
 # Vectorized.GridAdvection
-| Method | Mean     | Error    | StdDev   | Allocated |
-|------- |---------:|---------:|---------:|----------:|
-| Update | 75.73 us | 2.962 us | 2.770 us |       1 B |
+| Method | Mean     | Error   | StdDev  | Allocated |
+|------- |---------:|--------:|--------:|----------:|
+| Update | 135.1 us | 1.95 us | 1.63 us |       1 B |
 
 # GridAirflow
 | Method | Mean     | Error    | StdDev   | Allocated |

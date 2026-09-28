@@ -34,6 +34,7 @@ public sealed class GridAirflow : IGridAirflow {
 
 	void IGridAirflow.Update<TCell>(
 		AdvectionNeighbourhood<TCell> neighbourhood,
+		ProjectionNeighbourhood<TCell> projectionNeighbourhood,
 		Field<TCell> pressureSource,
 		Field<TCell> pressureDestination,
 		Field<TCell> sourceVelocityX,
@@ -44,6 +45,7 @@ public sealed class GridAirflow : IGridAirflow {
 		Field<TCell> intermediateVelocityY,
 		Field<TCell> projectionPressure,
 		Field<TCell> projectionPressureScratch,
+		Field<TCell> projectionDivergence,
 		Field<TCell> concentrationSource,
 		Field<TCell> concentrationDestination
 	) {
@@ -56,12 +58,14 @@ public sealed class GridAirflow : IGridAirflow {
 		ApplyPressureForce( neighbourhood, pressureDestination.Values, intermediateVelocityX.Values, intermediateVelocityY.Values );
 
 		_projection.Update(
+			projectionNeighbourhood,
 			intermediateVelocityX,
 			intermediateVelocityY,
 			destinationVelocityX,
 			destinationVelocityY,
 			projectionPressure,
-			projectionPressureScratch
+			projectionPressureScratch,
+			projectionDivergence
 		);
 
 		_advection.Update( neighbourhood, destinationVelocityX, destinationVelocityY, concentrationSource, concentrationDestination );

@@ -1,4 +1,5 @@
 using Kiyote.Simulations.Vectorized.Advection;
+using Kiyote.Simulations.Vectorized.Projection;
 
 namespace Kiyote.Simulations.Vectorized.Airflow;
 
@@ -16,6 +17,7 @@ public interface IGridAirflow {
 
 	void Update<TCell>(
 		AdvectionNeighbourhood<TCell> neighbourhood,
+		ProjectionNeighbourhood<TCell> projectionNeighbourhood,
 		Field<TCell> pressureSource,
 		Field<TCell> pressureDestination,
 		Field<TCell> sourceVelocityX,
@@ -26,6 +28,7 @@ public interface IGridAirflow {
 		Field<TCell> intermediateVelocityY,
 		Field<TCell> projectionPressure,
 		Field<TCell> projectionPressureScratch,
+		Field<TCell> projectionDivergence,
 		Field<TCell> concentrationSource,
 		Field<TCell> concentrationDestination
 	);

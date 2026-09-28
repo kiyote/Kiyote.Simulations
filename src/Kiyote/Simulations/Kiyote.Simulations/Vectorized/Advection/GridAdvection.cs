@@ -5,13 +5,10 @@ namespace Kiyote.Simulations.Vectorized.Advection;
 public sealed class GridAdvection : IGridAdvection {
 
 	private const int North = 0;
-	private const int NorthEast = 1;
 	private const int East = 2;
 	private const int SouthEast = 3;
 	private const int South = 4;
-	private const int SouthWest = 5;
 	private const int West = 6;
-	private const int NorthWest = 7;
 
 	private readonly float _timeStep;
 
@@ -43,41 +40,67 @@ public sealed class GridAdvection : IGridAdvection {
 				continue;
 			}
 
-			float dx = Math.Clamp( -vx[index] * timeStep, -1f, 1f );
-			float dy = Math.Clamp( -vy[index] * timeStep, -1f, 1f );
-			float fx = MathF.Abs( dx );
-			float fy = MathF.Abs( dy );
-			if( fx == 0f && fy == 0f ) {
+			float dx = -vx[index] * timeStep;
+			float dy = -vy[index] * timeStep;
+			if( ( dx == 0f && dy == 0f ) || !float.IsFinite( dx ) || !float.IsFinite( dy ) ) {
 				output[index] = self;
 				continue;
 			}
 
-			int baseIndex = index * AdvectionNeighbourhood<TCell>.DirectionCount;
-			int horizontalSlot = dx < 0f ? West : East;
-			int verticalSlot = dy < 0f ? North : South;
-			int diagonalSlot = dy < 0f
-				? ( dx < 0f ? NorthWest : NorthEast )
-				: ( dx < 0f ? SouthWest : SouthEast );
-
-			int horizontalIndex = neighbours[baseIndex + horizontalSlot];
-			int verticalIndex = neighbours[baseIndex + verticalSlot];
-			int diagonalIndex = neighbours[baseIndex + diagonalSlot];
-
-			float horizontal = horizontalIndex >= 0 ? input[horizontalIndex] : self;
-			float vertical = verticalIndex >= 0 ? input[verticalIndex] : self;
-			float diagonal;
-			if( diagonalIndex >= 0 ) {
-				diagonal = input[diagonalIndex];
-			} else if( verticalIndex < 0 ) {
-				diagonal = horizontal;
-			} else if( horizontalIndex < 0 ) {
-				diagonal = vertical;
-			} else {
-				diagonal = self;
+			// Walk the neighbour table to the cell containing the backtraced position, so
+			// displacements of more than one cell are interpolated rather than truncated.
+			// A blocked step stops that axis at the last reachable cell.
+			float floorX = MathF.Floor( dx );
+			float floorY = MathF.Floor( dy );
+			float fx = dx - floorX;
+			float fy = dy - floorY;
+			int remainingX = Math.Abs( (int)floorX );
+			int remainingY = Math.Abs( (int)floorY );
+			int horizontalSlot = floorX < 0f ? West : East;
+			int verticalSlot = floorY < 0f ? North : South;
+			int cell = index;
+			while( remainingX > 0 || remainingY > 0 ) {
+				bool moveX = remainingX >= remainingY;
+				int next = neighbours[( cell * AdvectionNeighbourhood<TCell>.DirectionCount ) + ( moveX ? horizontalSlot : verticalSlot )];
+				if( next < 0 ) {
+					if( moveX ) {
+						remainingX = 0;
+						fx = 0f;
+					} else {
+						remainingY = 0;
+						fy = 0f;
+					}
+					continue;
+				}
+				cell = next;
+				if( moveX ) {
+					remainingX--;
+				} else {
+					remainingY--;
+				}
 			}
 
-			float near = self + ( ( horizontal - self ) * fx );
-			float far = vertical + ( ( diagonal - vertical ) * fx );
+			int baseIndex = cell * AdvectionNeighbourhood<TCell>.DirectionCount;
+			int eastIndex = neighbours[baseIndex + East];
+			int southIndex = neighbours[baseIndex + South];
+			int southEastIndex = neighbours[baseIndex + SouthEast];
+
+			float origin = input[cell];
+			float east = eastIndex >= 0 ? input[eastIndex] : origin;
+			float south = southIndex >= 0 ? input[southIndex] : origin;
+			float southEast;
+			if( southEastIndex >= 0 ) {
+				southEast = input[southEastIndex];
+			} else if( southIndex < 0 ) {
+				southEast = east;
+			} else if( eastIndex < 0 ) {
+				southEast = south;
+			} else {
+				southEast = origin;
+			}
+
+			float near = origin + ( ( east - origin ) * fx );
+			float far = south + ( ( southEast - south ) * fx );
 			output[index] = near + ( ( far - near ) * fy );
 		}
 	}

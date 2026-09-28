@@ -9,12 +9,14 @@ namespace Kiyote.Simulations.Benchmarks.Vectorized.Projection;
 public class GridProjectionBenchmarks {
 
 	private readonly IGridProjection _projection;
+	private readonly ProjectionNeighbourhood<float> _neighbourhood;
 	private Field<float> _inputVelocityX;
 	private Field<float> _inputVelocityY;
 	private Field<float> _outputVelocityX;
 	private Field<float> _outputVelocityY;
 	private readonly Field<float> _pressure;
 	private readonly Field<float> _pressureScratch;
+	private readonly Field<float> _divergence;
 	private readonly IConnectivityGrid<float> _connectivity;
 	private readonly FloatConnectivityStrategy _connectivityStrategy;
 
@@ -31,9 +33,11 @@ public class GridProjectionBenchmarks {
 		_connectivity.UpdateConnectivity( _connectivityStrategy );
 
 		GridTopology<float> topology = _connectivity.BuildTopology();
+		_neighbourhood = new ProjectionNeighbourhood<float>( topology );
 		IFieldCompiler compiler = new FieldCompiler();
 		_pressure = compiler.Compile<float, Identity>( topology, default );
 		_pressureScratch = new Field<float>( topology );
+		_divergence = new Field<float>( topology );
 		_inputVelocityX = new Field<float>( topology );
 		_inputVelocityY = new Field<float>( topology );
 		_outputVelocityX = new Field<float>( topology );
@@ -45,7 +49,7 @@ public class GridProjectionBenchmarks {
 
 	[Benchmark]
 	public void Update() {
-		_projection.Update( _inputVelocityX, _inputVelocityY, _outputVelocityX, _outputVelocityY, _pressure, _pressureScratch );
+		_projection.Update( _neighbourhood, _inputVelocityX, _inputVelocityY, _outputVelocityX, _outputVelocityY, _pressure, _pressureScratch, _divergence );
 		(_inputVelocityX, _outputVelocityX) = (_outputVelocityX, _inputVelocityX);
 		(_inputVelocityY, _outputVelocityY) = (_outputVelocityY, _inputVelocityY);
 	}

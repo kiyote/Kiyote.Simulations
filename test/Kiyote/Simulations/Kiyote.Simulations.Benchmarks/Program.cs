@@ -34,7 +34,7 @@ public static class Program {
 				typeof( Airflow.GridAirflowBenchmarks ),
 				typeof( Vectorized.Airflow.GridAirflowBenchmarks ),
 			] )
-			.Run( args, config );
+			.RunAll( config, args );
 	}
 
 }

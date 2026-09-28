@@ -123,6 +123,7 @@ public sealed class GridAirflowTests {
 			GridTopology<float> topology
 		) {
 			Neighbourhood = new AdvectionNeighbourhood<float>( topology );
+			ProjectionNeighbourhood = new ProjectionNeighbourhood<float>( topology );
 			Pressure = new Field<float>( topology );
 			PressureScratch = new Field<float>( topology );
 			VelocityX = new Field<float>( topology );
@@ -133,11 +134,13 @@ public sealed class GridAirflowTests {
 			IntermediateY = new Field<float>( topology );
 			ProjectionPressure = new Field<float>( topology );
 			ProjectionPressureScratch = new Field<float>( topology );
+			ProjectionDivergence = new Field<float>( topology );
 			Concentration = new Field<float>( topology );
 			ConcentrationScratch = new Field<float>( topology );
 		}
 
 		public AdvectionNeighbourhood<float> Neighbourhood { get; }
+		public ProjectionNeighbourhood<float> ProjectionNeighbourhood { get; }
 		public Field<float> Pressure { get; private set; }
 		public Field<float> PressureScratch { get; private set; }
 		public Field<float> VelocityX { get; private set; }
@@ -148,6 +151,7 @@ public sealed class GridAirflowTests {
 		public Field<float> IntermediateY { get; }
 		public Field<float> ProjectionPressure { get; }
 		public Field<float> ProjectionPressureScratch { get; }
+		public Field<float> ProjectionDivergence { get; }
 		public Field<float> Concentration { get; private set; }
 		public Field<float> ConcentrationScratch { get; private set; }
 
@@ -158,11 +162,12 @@ public sealed class GridAirflowTests {
 			for( int i = 0; i < steps; i++ ) {
 				airflow.Update(
 					Neighbourhood,
+					ProjectionNeighbourhood,
 					Pressure, PressureScratch,
 					VelocityX, VelocityY,
 					VelocityScratchX, VelocityScratchY,
 					IntermediateX, IntermediateY,
-					ProjectionPressure, ProjectionPressureScratch,
+					ProjectionPressure, ProjectionPressureScratch, ProjectionDivergence,
 					Concentration, ConcentrationScratch
 				);
 				( Pressure, PressureScratch ) = ( PressureScratch, Pressure );

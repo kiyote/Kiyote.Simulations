@@ -133,27 +133,31 @@ public sealed class GridProjectionTests {
 		public Fields(
 			GridTopology<float> topology
 		) {
+			Neighbourhood = new ProjectionNeighbourhood<float>( topology );
 			X = new Field<float>( topology );
 			Y = new Field<float>( topology );
 			ScratchX = new Field<float>( topology );
 			ScratchY = new Field<float>( topology );
 			Pressure = new Field<float>( topology );
 			PressureScratch = new Field<float>( topology );
+			Divergence = new Field<float>( topology );
 		}
 
+		public ProjectionNeighbourhood<float> Neighbourhood { get; }
 		public Field<float> X { get; private set; }
 		public Field<float> Y { get; private set; }
 		public Field<float> ScratchX { get; private set; }
 		public Field<float> ScratchY { get; private set; }
 		public Field<float> Pressure { get; }
 		public Field<float> PressureScratch { get; }
+		public Field<float> Divergence { get; }
 
 		public void Step(
 			IGridProjection projection,
 			int steps
 		) {
 			for( int i = 0; i < steps; i++ ) {
-				projection.Update( X, Y, ScratchX, ScratchY, Pressure, PressureScratch );
+				projection.Update( Neighbourhood, X, Y, ScratchX, ScratchY, Pressure, PressureScratch, Divergence );
 				( X, ScratchX ) = ( ScratchX, X );
 				( Y, ScratchY ) = ( ScratchY, Y );
 			}

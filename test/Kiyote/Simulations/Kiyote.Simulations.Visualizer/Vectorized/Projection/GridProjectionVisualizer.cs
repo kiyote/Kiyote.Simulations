@@ -65,12 +65,14 @@ internal sealed class GridProjectionVisualizer {
 
 		// Single leaf at offset 0, so field index = row * Size + column.
 		GridTopology<float> topology = connectivity.BuildTopology();
+		ProjectionNeighbourhood<float> neighbourhood = new ProjectionNeighbourhood<float>( topology );
 		Field<float> inputX = new Field<float>( topology );
 		Field<float> inputY = new Field<float>( topology );
 		Field<float> outputX = new Field<float>( topology );
 		Field<float> outputY = new Field<float>( topology );
 		Field<float> pressure = new Field<float>( topology );
 		Field<float> pressureScratch = new Field<float>( topology );
+		Field<float> divergence = new Field<float>( topology );
 
 		inputX.Values[( 5 * Size ) + 95] = -10f;
 		inputY.Values[( 5 * Size ) + 95] = -10f;
@@ -80,7 +82,7 @@ internal sealed class GridProjectionVisualizer {
 		using IAnimationBuilder velocityBuilder = _animation.StartAnimation( velocityFileName, TimeSpan.FromMilliseconds( 100 ) );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
 			for( int step = 0; step < StepsPerFrame; step++ ) {
-				_projection.Update( inputX, inputY, outputX, outputY, pressure, pressureScratch );
+				_projection.Update( neighbourhood, inputX, inputY, outputX, outputY, pressure, pressureScratch, divergence );
 				(inputX, outputX) = (outputX, inputX);
 				(inputY, outputY) = (outputY, inputY);
 			}
