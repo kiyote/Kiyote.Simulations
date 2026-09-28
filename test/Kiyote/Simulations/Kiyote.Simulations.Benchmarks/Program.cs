@@ -15,9 +15,10 @@ BenchmarkSwitcher
 		//typeof( Kiyote.Simulations.Benchmarks.Diffusion.GridDiffusionBenchmarks ),
 		//typeof( Kiyote.Simulations.Benchmarks.Vectorized.Diffusion.GridDiffusionBenchmarks ),
 
-		typeof( Kiyote.Simulations.Benchmarks.Pressure.GridPressureBenchmarks ),
-		typeof( Kiyote.Simulations.Benchmarks.Vectorized.Pressure.GridPressureBenchmarks ),
+		//typeof( Kiyote.Simulations.Benchmarks.Pressure.GridPressureBenchmarks ),
+		//typeof( Kiyote.Simulations.Benchmarks.Vectorized.Pressure.GridPressureBenchmarks ),
 
-		//typeof( GridProjectionBenchmarks ),
+		typeof( Kiyote.Simulations.Benchmarks.Projection.GridProjectionBenchmarks ),
+		typeof( Kiyote.Simulations.Benchmarks.Vectorized.Projection.GridProjectionBenchmarks ),
 	] )
 	.RunAll( config, args );

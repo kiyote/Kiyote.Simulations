@@ -51,7 +51,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 							laneFlags[lane] = flagBytes[index + lane];
 						}
 						Vector<int> flags = new Vector<int>( laneFlags );
-						Vector<float> value = new Vector<float>( input.Slice( index ) );
+						Vector<float> value = new Vector<float>( input[index..] );
 						Vector<float> sum = Vector<float>.Zero;
 						sum += GatherLanes( flags, Direction.North, input, index - width, value );
 						sum += GatherLanes( flags, Direction.NorthEast, input, index - width + 1, value );
@@ -62,7 +62,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 						sum += GatherLanes( flags, Direction.West, input, index - 1, value );
 						sum += GatherLanes( flags, Direction.NorthWest, input, index - width - 1, value );
 						// Cells with Direction.None gather nothing, so they copy through unchanged.
-						( value + ( sum * rate ) ).CopyTo( output.Slice( index ) );
+						( value + ( sum * rate ) ).CopyTo( output[index..] );
 					}
 				}
 				for( ; column < width; column++ ) {
@@ -140,7 +140,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 	) {
 		Vector<int> bit = new Vector<int>( (int)direction );
 		Vector<int> mask = Vector.Equals( flags & bit, bit );
-		Vector<float> difference = new Vector<float>( input.Slice( neighbour ) ) - value;
+		Vector<float> difference = new Vector<float>( input[neighbour..] ) - value;
 		return Vector.ConditionalSelect( mask.As<int, float>(), difference, Vector<float>.Zero );
 	}
 

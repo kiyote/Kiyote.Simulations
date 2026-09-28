@@ -7,7 +7,7 @@ using Kiyote.Simulations.Projection;
 
 namespace Kiyote.Simulations.Visualizer.Projection;
 
-internal sealed class OpenGridProjectionVisualizer {
+internal sealed class GridProjectionVisualizer {
 
 	public const int Size = 100;
 	public const int TotalFrameCount = 100;
@@ -20,14 +20,15 @@ internal sealed class OpenGridProjectionVisualizer {
 	private readonly IGridProjection _projection;
 	private readonly IAnimationWriter _animation;
 	private readonly IFileSystem _fileSystem;
-	private readonly OpenFloatConnectivityStrategy _connectivityStrategy;
+	private readonly IConnectivityStrategy<float> _openConnectivity;
+	private readonly IConnectivityStrategy<float> _boundaryConnectivity;
 	private readonly FloatProjectionStrategy _projectionStrategy;
 	private readonly INumericBufferOperator _op;
 
 	private readonly INumericBuffer<byte> _pixels;
 	private readonly INumericBufferFactory _bufferFactory;
 
-	public OpenGridProjectionVisualizer(
+	public GridProjectionVisualizer(
 		IGridProjection projection,
 		IAnimationWriter animationWriter,
 		IFileSystem fileSystem,
@@ -38,7 +39,8 @@ internal sealed class OpenGridProjectionVisualizer {
 		_animation = animationWriter;
 		_fileSystem = fileSystem;
 		_op = op;
-		_connectivityStrategy = new OpenFloatConnectivityStrategy();
+		_openConnectivity = new OpenFloatConnectivityStrategy();
+		_boundaryConnectivity = new BoundaryFloatConnectivityStrategy( 0, 0, Size, Size );
 		_projectionStrategy = new FloatProjectionStrategy();
 		_pixels = bufferFactory.Create<byte>( Size, Size, 0 );
 		_bufferFactory = bufferFactory;
@@ -47,17 +49,26 @@ internal sealed class OpenGridProjectionVisualizer {
 	public void Execute(
 		string outputFolder
 	) {
-		string pressureFileName = _fileSystem.Path.Combine( outputFolder, "projection_open.gif" );
-		string velocityFileName = _fileSystem.Path.Combine( outputFolder, "velocity_open.gif" );
+		Run( outputFolder, "open", _openConnectivity );
+		Run( outputFolder, "boundary", _boundaryConnectivity );
+	}
+
+	private void Run(
+		string outputFolder,
+		string suffix,
+		IConnectivityStrategy<float> connectivityStrategy
+	) {
+		string pressureFileName = _fileSystem.Path.Combine( outputFolder, $"projection_{suffix}.gif" );
+		string velocityFileName = _fileSystem.Path.Combine( outputFolder, $"velocity_{suffix}.gif" );
 		BufferGrid<float> inputPressure = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> outputPressure = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> velocityMagnitude = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		IMutableGrid<float> velocityGrid = velocityMagnitude;
-		RaggedArrayGrid<Velocity> inputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
-		RaggedArrayGrid<Velocity> outputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
+		RaggedArrayGrid<Velocity> inputVelocity = new RaggedArrayGrid<Velocity>( Size, Size );
+		RaggedArrayGrid<Velocity> outputVelocity = new RaggedArrayGrid<Velocity>( Size, Size );
 		IConnectivityGrid<float> connectivity = new ConnectivityGrid<float>();
 		connectivity.TryAttach( inputPressure, 0, 0 );
-		connectivity.UpdateConnectivity( _connectivityStrategy );
+		connectivity.UpdateConnectivity( connectivityStrategy );
 
 		// The projection pressure field is solved from the velocity divergence each
 		// call, so only the velocity is seeded.
@@ -78,8 +89,8 @@ internal sealed class OpenGridProjectionVisualizer {
 			pressureBuilder.AddFrame( _pixels );
 
 			IMutableGrid<Velocity> outputVelocityGrid = inputVelocity;
-			for (int r = 0; r < Size; r++ ) {
-				for( int c = 0; c < Size; c++ ) {					
+			for( int r = 0; r < Size; r++ ) {
+				for( int c = 0; c < Size; c++ ) {
 					velocityGrid[c, r] = outputVelocityGrid[c, r].Magnitude;
 				}
 			}

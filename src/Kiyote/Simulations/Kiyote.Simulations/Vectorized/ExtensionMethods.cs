@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Simulations.Vectorized.Diffusion;
 using Kiyote.Simulations.Vectorized.Pressure;
+using Kiyote.Simulations.Vectorized.Projection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Kiyote.Simulations.Vectorized;
@@ -17,6 +18,7 @@ public static class ExtensionMethods {
 		return services
 			.AddSingleton<IFieldCompiler, FieldCompiler>()
 			.AddSingleton<IGridDiffusion, GridDiffusion>()
-			.AddSingleton<IGridPressure, GridPressure>();
+			.AddSingleton<IGridPressure, GridPressure>()
+			.AddSingleton<IGridProjection, GridProjection>();
 	}
 }
