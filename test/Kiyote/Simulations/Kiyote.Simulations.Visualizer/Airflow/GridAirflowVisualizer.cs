@@ -77,6 +77,7 @@ internal sealed class GridAirflowVisualizer {
 		BufferGrid<float> outputPressure = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> projectionPressureSource = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> projectionPressureDestination = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
+		BufferGrid<float> projectionDivergence = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> inputConcentration = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> outputConcentration = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> velocityMagnitude = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
@@ -104,6 +105,7 @@ internal sealed class GridAirflowVisualizer {
 					outputVelocity,
 					projectionPressureSource,
 					projectionPressureDestination,
+					projectionDivergence,
 					_projectionStrategy,
 					inputConcentration,
 					outputConcentration,

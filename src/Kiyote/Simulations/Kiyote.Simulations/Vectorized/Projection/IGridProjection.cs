@@ -7,10 +7,10 @@ namespace Kiyote.Simulations.Vectorized.Projection;
 public interface IGridProjection {
 
 	void Update<TCell>(
-		Field<TCell> sourceX,
-		Field<TCell> sourceY,
-		Field<TCell> destinationX,
-		Field<TCell> destinationY,
+		Field<TCell> sourceVelocityX,
+		Field<TCell> sourceVelocityY,
+		Field<TCell> destinationVelocityX,
+		Field<TCell> destinationVelocityY,
 		Field<TCell> pressure,
 		Field<TCell> pressureScratch
 	);

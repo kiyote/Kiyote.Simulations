@@ -62,6 +62,7 @@ internal sealed class GridProjectionVisualizer {
 		string velocityFileName = _fileSystem.Path.Combine( outputFolder, $"velocity_{suffix}.gif" );
 		BufferGrid<float> inputPressure = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> outputPressure = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
+		BufferGrid<float> divergence = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		BufferGrid<float> velocityMagnitude = new BufferGrid<float>( _bufferFactory.Create<float>( Size, Size, 0 ) );
 		IMutableGrid<float> velocityGrid = velocityMagnitude;
 		RaggedArrayGrid<Velocity> inputVelocity = new RaggedArrayGrid<Velocity>( Size, Size );
@@ -80,7 +81,7 @@ internal sealed class GridProjectionVisualizer {
 		using IAnimationBuilder velocityBuilder = _animation.StartAnimation( velocityFileName, TimeSpan.FromMilliseconds( 100 ) );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
 			for( int step = 0; step < StepsPerFrame; step++ ) {
-				_projection.Update( connectivity, inputVelocity, outputVelocity, inputPressure, outputPressure, _projectionStrategy );
+				_projection.Update( connectivity, inputVelocity, outputVelocity, inputPressure, outputPressure, divergence, _projectionStrategy );
 				(inputPressure, outputPressure) = (outputPressure, inputPressure);
 				(inputVelocity, outputVelocity) = (outputVelocity, inputVelocity);
 			}

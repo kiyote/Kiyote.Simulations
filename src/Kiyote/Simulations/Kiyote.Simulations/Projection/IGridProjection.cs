@@ -31,12 +31,18 @@ public interface IGridProjection {
 	// two grids across iterations, mirroring how IGridDiffusion/IGridPressure double-
 	// buffer their own source/destination). Callers do not need to seed them with
 	// anything meaningful - their contents are overwritten as part of the solve.
+	//
+	// divergence is caller-owned float scratch space, sized to match source/destination,
+	// that receives the divergence right-hand side of the Poisson solve. Its contents are
+	// overwritten every call, keeping the simulation itself stateless; each grid fed
+	// through Update needs its own matching divergence grid.
 	void Update<TCell, TPressure, TProjectionStrategy>(
 		IConnectivityGrid<TCell> connectivity,
 		IGrid<Velocity> sourceVelocity,
 		IMutableGrid<Velocity> destinationVelocity,
 		IMutableGrid<TPressure> pressureSource,
 		IMutableGrid<TPressure> pressureDestination,
+		IMutableGrid<float> divergence,
 		TProjectionStrategy projection
 	)
 		where TProjectionStrategy : IProjectionStrategy<TPressure>;

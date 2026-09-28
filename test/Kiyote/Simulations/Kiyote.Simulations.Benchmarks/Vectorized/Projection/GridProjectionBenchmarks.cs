@@ -1,6 +1,5 @@
 using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
-using Kiyote.Simulations.Benchmarks.Diffusion;
 using Kiyote.Simulations.Vectorized;
 using Kiyote.Simulations.Vectorized.Projection;
 
@@ -10,10 +9,10 @@ namespace Kiyote.Simulations.Benchmarks.Vectorized.Projection;
 public class GridProjectionBenchmarks {
 
 	private readonly IGridProjection _projection;
-	private Field<float> _inputX;
-	private Field<float> _inputY;
-	private Field<float> _outputX;
-	private Field<float> _outputY;
+	private Field<float> _inputVelocityX;
+	private Field<float> _inputVelocityY;
+	private Field<float> _outputVelocityX;
+	private Field<float> _outputVelocityY;
 	private readonly Field<float> _pressure;
 	private readonly Field<float> _pressureScratch;
 	private readonly IConnectivityGrid<float> _connectivity;
@@ -35,20 +34,20 @@ public class GridProjectionBenchmarks {
 		IFieldCompiler compiler = new FieldCompiler();
 		_pressure = compiler.Compile<float, Identity>( topology, default );
 		_pressureScratch = new Field<float>( topology );
-		_inputX = new Field<float>( topology );
-		_inputY = new Field<float>( topology );
-		_outputX = new Field<float>( topology );
-		_outputY = new Field<float>( topology );
+		_inputVelocityX = new Field<float>( topology );
+		_inputVelocityY = new Field<float>( topology );
+		_outputVelocityX = new Field<float>( topology );
+		_outputVelocityY = new Field<float>( topology );
 		for( int r = 0; r < 100; r++ ) {
-			_inputX.Values[r * 100] = 100f;
+			_inputVelocityX.Values[r * 100] = 100f;
 		}
 	}
 
 	[Benchmark]
 	public void Update() {
-		_projection.Update( _inputX, _inputY, _outputX, _outputY, _pressure, _pressureScratch );
-		(_inputX, _outputX) = (_outputX, _inputX);
-		(_inputY, _outputY) = (_outputY, _inputY);
+		_projection.Update( _inputVelocityX, _inputVelocityY, _outputVelocityX, _outputVelocityY, _pressure, _pressureScratch );
+		(_inputVelocityX, _outputVelocityX) = (_outputVelocityX, _inputVelocityX);
+		(_inputVelocityY, _outputVelocityY) = (_outputVelocityY, _inputVelocityY);
 	}
 
 	private readonly struct Identity : IFieldSelector<float> {

@@ -16,6 +16,7 @@ public class GridProjectionBenchmarks {
 	private readonly IGridProjection _projection;
 	private IMutableGrid<float> _inputPressure;
 	private IMutableGrid<float> _outputPressure;
+	private readonly IMutableGrid<float> _divergence;
 	private IMutableGrid<Velocity> _inputVelocity;
 	private IMutableGrid<Velocity> _outputVelocity;
 	private readonly IConnectivityGrid<float> _connectivity;
@@ -32,6 +33,7 @@ public class GridProjectionBenchmarks {
 		_projection = new GridProjection();
 		_inputPressure = new RaggedArrayGrid<float>( 100, 100 );
 		_outputPressure = new RaggedArrayGrid<float>( 100, 100 );
+		_divergence = new RaggedArrayGrid<float>( 100, 100 );
 		_inputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
 		_outputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );
 		for( int r = 0; r < 100; r++ ) {
@@ -47,7 +49,7 @@ public class GridProjectionBenchmarks {
 
 	[Benchmark]
 	public void Update() {
-		_projection.Update<float, float, FloatProjectionStrategy>( _connectivity, _inputVelocity, _outputVelocity, _inputPressure, _outputPressure, _projectionStrategy );
+		_projection.Update<float, float, FloatProjectionStrategy>( _connectivity, _inputVelocity, _outputVelocity, _inputPressure, _outputPressure, _divergence, _projectionStrategy );
 		(_inputPressure, _outputPressure) = (_outputPressure, _inputPressure);
 		(_inputVelocity, _outputVelocity) = (_outputVelocity, _inputVelocity);
 	}

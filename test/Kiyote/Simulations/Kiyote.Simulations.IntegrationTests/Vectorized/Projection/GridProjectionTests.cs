@@ -42,6 +42,7 @@ public sealed class GridProjectionTests {
 		// Reference: the existing non-vectorized projection.
 		RaggedArrayGrid<float> pressureIn = new RaggedArrayGrid<float>( Size, Size );
 		RaggedArrayGrid<float> pressureOut = new RaggedArrayGrid<float>( Size, Size );
+		RaggedArrayGrid<float> divergence = new RaggedArrayGrid<float>( Size, Size );
 		RaggedArrayGrid<Velocity> velocityIn = new RaggedArrayGrid<Velocity>( Size, Size );
 		RaggedArrayGrid<Velocity> velocityOut = new RaggedArrayGrid<Velocity>( Size, Size );
 		IMutableGrid<Velocity> seed = velocityIn;
@@ -68,7 +69,7 @@ public sealed class GridProjectionTests {
 		IMutableGrid<Velocity> vIn = velocityIn;
 		IMutableGrid<Velocity> vOut = velocityOut;
 		for( int i = 0; i < steps; i++ ) {
-			reference.Update( connectivity, vIn, vOut, pIn, pOut, referenceStrategy );
+			reference.Update( connectivity, vIn, vOut, pIn, pOut, divergence, referenceStrategy );
 			( vIn, vOut ) = ( vOut, vIn );
 		}
 		fields.Step( _projection, steps );

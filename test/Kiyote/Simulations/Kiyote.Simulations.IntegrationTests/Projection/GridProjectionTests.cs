@@ -23,6 +23,7 @@ internal sealed class GridProjectionTests {
 	private IMutableGrid<Velocity> _destinationVelocity;
 	private IMutableGrid<float> _sourcePressure;
 	private IMutableGrid<float> _destinationPressure;
+	private IMutableGrid<float> _divergence;
 	private IConnectivityGrid<float> _openConnectivity;
 	private IConnectivityGrid<float> _boundaryConnectivity;
 
@@ -46,6 +47,7 @@ internal sealed class GridProjectionTests {
 		_destinationVelocity = new RaggedArrayGrid<Velocity>( 10, 10 );
 		_sourcePressure = new RaggedArrayGrid<float>( 10, 10 );
 		_destinationPressure = new RaggedArrayGrid<float>( 10, 10 );
+		_divergence = new RaggedArrayGrid<float>( 10, 10 );
 
 		_openConnectivity = new ConnectivityGrid<float>();
 		_openConnectivity.TryAttach( _sourcePressure, 0, 0 );
@@ -62,7 +64,7 @@ internal sealed class GridProjectionTests {
 		_sourceVelocity[5, 5] = new Velocity( 1.0f, 0.0f );
 
 		// Act
-		_projection.Update( _openConnectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _floatProjectionStrategy );
+		_projection.Update( _openConnectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _divergence, _floatProjectionStrategy );
 
 		// Assert
 		using( Assert.EnterMultipleScope() ) {
@@ -88,6 +90,7 @@ internal sealed class GridProjectionTests {
 		const int size = 100;
 		IMutableGrid<float> sourcePressure = new RaggedArrayGrid<float>( size, size );
 		IMutableGrid<float> destinationPressure = new RaggedArrayGrid<float>( size, size );
+		IMutableGrid<float> divergence = new RaggedArrayGrid<float>( size, size );
 		IConnectivityGrid<float> connectivity = new ConnectivityGrid<float>();
 		connectivity.TryAttach( sourcePressure, 0, 0 );
 		connectivity.UpdateConnectivity( _openConnectivityStrategy );
@@ -100,7 +103,7 @@ internal sealed class GridProjectionTests {
 
 		// Act
 		for( int i = 0; i < 400; i++ ) {
-			_projection.Update( connectivity, sourceVelocity, destinationVelocity, sourcePressure, destinationPressure, _floatProjectionStrategy );
+			_projection.Update( connectivity, sourceVelocity, destinationVelocity, sourcePressure, destinationPressure, divergence, _floatProjectionStrategy );
 			( sourceVelocity, destinationVelocity ) = ( destinationVelocity, sourceVelocity );
 		}
 
@@ -142,7 +145,7 @@ internal sealed class GridProjectionTests {
 		_sourcePressure[5, 5] = 1000f;
 
 		// Act
-		_projection.Update( _boundaryConnectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _floatProjectionStrategy );
+		_projection.Update( _boundaryConnectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _divergence, _floatProjectionStrategy );
 
 		// Assert
 		using( Assert.EnterMultipleScope() ) {
@@ -189,7 +192,7 @@ internal sealed class GridProjectionTests {
 		// accumulation across calls (rather than just within a single call) would
 		// also be caught.
 		for( int i = 0; i < 5; i++ ) {
-			_projection.Update( _boundaryConnectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _floatProjectionStrategy );
+			_projection.Update( _boundaryConnectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _divergence, _floatProjectionStrategy );
 			( _sourceVelocity, _destinationVelocity ) = ( _destinationVelocity, _sourceVelocity );
 			( _sourcePressure, _destinationPressure ) = ( _destinationPressure, _sourcePressure );
 		}
@@ -218,6 +221,7 @@ internal sealed class GridProjectionTests {
 
 		IMutableGrid<float> sourcePressure = new RaggedArrayGrid<float>( size, size );
 		IMutableGrid<float> destinationPressure = new RaggedArrayGrid<float>( size, size );
+		IMutableGrid<float> divergence = new RaggedArrayGrid<float>( size, size );
 		visualizerConnectivity.TryAttach( sourcePressure, 0, 0 );
 		visualizerConnectivity.UpdateConnectivity( visualizerConnectivityStrategy );
 
@@ -248,7 +252,7 @@ internal sealed class GridProjectionTests {
 		// to with anything other than their untouched starting value.
 		for( int frame = 0; frame < totalFrameCount; frame++ ) {
 			for( int step = 0; step < stepsPerFrame; step++ ) {
-				_projection.Update( visualizerConnectivity, sourceVelocity, destinationVelocity, sourcePressure, destinationPressure, _floatProjectionStrategy );
+				_projection.Update( visualizerConnectivity, sourceVelocity, destinationVelocity, sourcePressure, destinationPressure, divergence, _floatProjectionStrategy );
 				( sourceVelocity, destinationVelocity ) = ( destinationVelocity, sourceVelocity );
 				( sourcePressure, destinationPressure ) = ( destinationPressure, sourcePressure );
 

@@ -40,6 +40,7 @@ public sealed class GridAirflow : IGridAirflow {
 		IMutableGrid<Velocity> destinationVelocity,
 		IMutableGrid<TPressure> projectionPressureSource,
 		IMutableGrid<TPressure> projectionPressureDestination,
+		IMutableGrid<float> projectionDivergence,
 		TProjectionStrategy projectionStrategy,
 		IGrid<TValue> concentrationSource,
 		IMutableGrid<TValue> concentrationDestination,
@@ -77,6 +78,7 @@ public sealed class GridAirflow : IGridAirflow {
 			destinationVelocity,
 			projectionPressureSource,
 			projectionPressureDestination,
+			projectionDivergence,
 			projectionStrategy
 		);
 

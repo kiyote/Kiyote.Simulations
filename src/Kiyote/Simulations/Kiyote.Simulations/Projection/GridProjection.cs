@@ -42,6 +42,7 @@ public sealed class GridProjection : IGridProjection {
 		IMutableGrid<Velocity> destination,
 		IMutableGrid<TPressure> pressureSource,
 		IMutableGrid<TPressure> pressureDestination,
+		IMutableGrid<float> divergence,
 		TProjectionStrategy projection
 	) {
 		if( source.Width != destination.Width
@@ -50,8 +51,10 @@ public sealed class GridProjection : IGridProjection {
 			|| source.Height != pressureSource.Height
 			|| source.Width != pressureDestination.Width
 			|| source.Height != pressureDestination.Height
+			|| source.Width != divergence.Width
+			|| source.Height != divergence.Height
 		) {
-			throw new ArgumentException( "Source, destination, and pressure grids must all have the same dimensions." );
+			throw new ArgumentException( "Source, destination, pressure, and divergence grids must all have the same dimensions." );
 		}
 
 		int left = source.Column;
@@ -67,15 +70,13 @@ public sealed class GridProjection : IGridProjection {
 		// was written into the pressure field and then diffused, which yields
 		// p ~ blur(div v) rather than solving for p; subtracting grad(blur(div v))
 		// amplifies divergence every call and made the velocity field blow up.)
-		float[][] rhs = new float[height][];
 		for( int row = top; row < top + height; row++ ) {
-			float[] rhsRow = new float[width];
-			rhs[row - top] = rhsRow;
 			for( int column = left; column < left + width; column++ ) {
 				if( connectivity[column, row] == Direction.None ) {
+					divergence[column, row] = 0f;
 					continue;
 				}
-				rhsRow[column - left] = PoissonScale * CalculateDivergence( connectivity, source, column, row, left, top, width, height );
+				divergence[column, row] = PoissonScale * CalculateDivergence( connectivity, source, column, row, left, top, width, height );
 			}
 		}
 
@@ -86,7 +87,6 @@ public sealed class GridProjection : IGridProjection {
 		IMutableGrid<TPressure> relaxationDestination = pressureDestination;
 		for( int i = 0; i < Iterations; i++ ) {
 			for( int row = top; row < top + height; row++ ) {
-				float[] rhsRow = rhs[row - top];
 				for( int column = left; column < left + width; column++ ) {
 					TPressure current = relaxationSource[column, row]!;
 					Direction sourceConnectivity = connectivity[column, row];
@@ -110,7 +110,7 @@ public sealed class GridProjection : IGridProjection {
 						continue;
 					}
 
-					float updated = ( neighborSum - rhsRow[column - left] ) / neighborCount;
+					float updated = ( neighborSum - divergence[column, row] ) / neighborCount;
 					float delta = updated - projection.GetPressure( current );
 					relaxationDestination[column, row] = projection.Apply( new GridCell<TPressure>( column, row, current ), delta );
 				}
@@ -149,7 +149,7 @@ public sealed class GridProjection : IGridProjection {
 
 		foreach( (int deltaColumn, int deltaRow, Direction direction, float unitX, float unitY) in _neighborDeltas ) {
 			Velocity neighborVelocity = GetNeighborOrReflectedVelocity(
-				connectivity, velocity, sourceConnectivity, sourceVelocity, direction,
+				velocity, sourceConnectivity, sourceVelocity, direction,
 				column, row, deltaColumn, deltaRow, unitX, unitY, left, top, width, height
 			);
 			divergence += ( ( neighborVelocity.X - sourceVelocity.X ) * unitX ) + ( ( neighborVelocity.Y - sourceVelocity.Y ) * unitY );
@@ -164,8 +164,7 @@ public sealed class GridProjection : IGridProjection {
 	// negated (no-penetration) while its tangential component is preserved (free-slip). This
 	// treats every wall/edge uniformly as a solid boundary rather than simply omitting it from
 	// the divergence average.
-	private static Velocity GetNeighborOrReflectedVelocity<TCell>(
-		IConnectivityGrid<TCell> connectivity,
+	private static Velocity GetNeighborOrReflectedVelocity(
 		IGrid<Velocity> velocity,
 		Direction sourceConnectivity,
 		Velocity sourceVelocity,

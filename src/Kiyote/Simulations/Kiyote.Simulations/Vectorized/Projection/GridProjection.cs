@@ -53,14 +53,14 @@ public sealed class GridProjection : IGridProjection {
 	}
 
 	void IGridProjection.Update<TCell>(
-		Field<TCell> sourceX,
-		Field<TCell> sourceY,
-		Field<TCell> destinationX,
-		Field<TCell> destinationY,
+		Field<TCell> sourceVelocityX,
+		Field<TCell> sourceVelocityY,
+		Field<TCell> destinationVelocityX,
+		Field<TCell> destinationVelocityY,
 		Field<TCell> pressure,
 		Field<TCell> pressureScratch
 	) {
-		GridTopology<TCell> topology = sourceX.Topology;
+		GridTopology<TCell> topology = sourceVelocityX.Topology;
 		if( !ReferenceEquals( _topology, topology ) ) {
 			_neighbours = BuildNeighbours( topology );
 			_rhs = new float[topology.CellCount];
@@ -69,8 +69,8 @@ public sealed class GridProjection : IGridProjection {
 
 		ReadOnlySpan<int> neighbours = _neighbours;
 		ReadOnlySpan<Direction> cells = topology.Cells;
-		ReadOnlySpan<float> vx = sourceX.Values;
-		ReadOnlySpan<float> vy = sourceY.Values;
+		ReadOnlySpan<float> vx = sourceVelocityX.Values;
+		ReadOnlySpan<float> vy = sourceVelocityY.Values;
 		Span<float> rhs = _rhs;
 
 		CalculateDivergence( neighbours, cells, vx, vy, rhs );
@@ -87,7 +87,7 @@ public sealed class GridProjection : IGridProjection {
 			relaxationSource.CopyTo( pressure.Values );
 		}
 
-		SubtractGradient( neighbours, cells, pressure.Values, vx, vy, destinationX.Values, destinationY.Values );
+		SubtractGradient( neighbours, cells, pressure.Values, vx, vy, destinationVelocityX.Values, destinationVelocityY.Values );
 	}
 
 	private static void CalculateDivergence(
