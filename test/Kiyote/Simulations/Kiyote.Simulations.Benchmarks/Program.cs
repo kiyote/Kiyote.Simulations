@@ -2,7 +2,7 @@ using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
-using Kiyote.Simulations.Benchmarks.Diffusion;
+using Kiyote.Simulations.Benchmarks;
 using Kiyote.Simulations.Benchmarks.Pressure;
 using Kiyote.Simulations.Benchmarks.Projection;
 
@@ -15,8 +15,9 @@ ManualConfig config = DefaultConfig.Instance
 
 BenchmarkSwitcher
 	.FromTypes( [
-		//typeof( GridDiffusionBenchmarks ),
+		typeof( Kiyote.Simulations.Benchmarks.Diffusion.GridDiffusionBenchmarks ),
+		typeof( Kiyote.Simulations.Benchmarks.Vectorized.Diffusion.GridDiffusionBenchmarks ),
 		//typeof( GridPressureBenchmarks ),
-		typeof( GridProjectionBenchmarks ),
+		//typeof( GridProjectionBenchmarks ),
 	] )
 	.RunAll( config, args );

@@ -10,7 +10,12 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # GridDiffusion
 | Method | Mean     | Error     | StdDev    | Allocated |
 |------- |---------:|----------:|----------:|----------:|
-| Update | 1.039 ms | 0.0212 ms | 0.0188 ms |         - |
+| Update | 1.054 ms | 0.0302 ms | 0.0282 ms |         - |
+
+# Vectorized.GridDiffusion
+| Method | Mean     | Error    | StdDev   | Allocated |
+|------- |---------:|---------:|---------:|----------:|
+| Update | 26.44 us | 0.194 us | 0.172 us |         - |
 
 # GridPressure
 | Method | Mean     | Error     | StdDev    | Allocated |
