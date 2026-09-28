@@ -1,6 +1,5 @@
 using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
-using Kiyote.Simulations.Pressure;
 
 namespace Kiyote.Simulations.Projection;
 
@@ -10,6 +9,14 @@ public sealed class GridProjection : IGridProjection {
 	// field before it is considered converged enough to subtract its gradient from the
 	// source velocity field.
 	private const int Iterations = 20;
+
+	// The divergence and gradient operators below average (neighbor - self) projected
+	// onto the 8 unit directions and divide by 8, so for smooth fields each behaves
+	// like s * (true operator) with s = (2 + 2*sqrt(2)) / 8. Their composition is
+	// therefore ~s^2 * Laplacian, while the compact 8-neighbor graph Laplacian used by
+	// the Jacobi solve is ~3 * Laplacian. Scaling the divergence right-hand side by
+	// 3 / s^2 makes subtracting the gradient of the solved field cancel divergence.
+	private const float PoissonScale = 8.235294f;
 
 	// Unlike GridDiffusion (which accumulates a pairwise transfer once per edge and
 	// applies it to both cells), divergence/gradient are computed independently per
@@ -26,12 +33,7 @@ public sealed class GridProjection : IGridProjection {
 		( -1, -1, Direction.NorthWest, -0.7071068f, -0.7071068f ),
 	];
 
-	private readonly IGridPressure _gridPressure;
-
-	public GridProjection(
-		IGridPressure gridPressure
-	) {
-		_gridPressure = gridPressure;
+	public GridProjection() {
 	}
 
 	void IGridProjection.Update<TCell, TPressure, TProjectionStrategy>(
@@ -60,32 +62,59 @@ public sealed class GridProjection : IGridProjection {
 			return;
 		}
 
-		// Seed the pressure-correction field with the divergence of the source velocity
-		// field, using the caller-supplied connectivity as the source of truth for which
-		// neighbors participate in the discrete divergence operator at each cell.
+		// Compute the divergence of the source velocity field once; it is the fixed
+		// right-hand side of the Poisson equation Laplacian(p) = div(v). (Previously it
+		// was written into the pressure field and then diffused, which yields
+		// p ~ blur(div v) rather than solving for p; subtracting grad(blur(div v))
+		// amplifies divergence every call and made the velocity field blow up.)
+		float[][] rhs = new float[height][];
 		for( int row = top; row < top + height; row++ ) {
+			float[] rhsRow = new float[width];
+			rhs[row - top] = rhsRow;
 			for( int column = left; column < left + width; column++ ) {
 				if( connectivity[column, row] == Direction.None ) {
 					continue;
 				}
-				float divergence = CalculateDivergence( connectivity, source, column, row, left, top, width, height );
-				GridCell<TPressure> cell = new( column, row, pressureSource[column, row] );
-				pressureSource[column, row] = projection.SetDivergence( cell, divergence );
+				rhsRow[column - left] = PoissonScale * CalculateDivergence( connectivity, source, column, row, left, top, width, height );
 			}
 		}
 
-		// Iteratively relax the pressure-correction field towards convergence by
-		// composing IGridPressure, double-buffering between pressureSource and
-		// pressureDestination the same way callers of IGridPressure/IGridDiffusion do.
+		// Jacobi iterations of the Poisson equation, warm-started from whatever is
+		// already in pressureSource (typically the previous call's solution). Blocked
+		// edges are omitted, which is a zero-gradient (Neumann) boundary.
 		IMutableGrid<TPressure> relaxationSource = pressureSource;
 		IMutableGrid<TPressure> relaxationDestination = pressureDestination;
 		for( int i = 0; i < Iterations; i++ ) {
-			_gridPressure.Update<TCell, TPressure, float, TProjectionStrategy>(
-				connectivity,
-				relaxationSource,
-				relaxationDestination,
-				projection
-			);
+			for( int row = top; row < top + height; row++ ) {
+				float[] rhsRow = rhs[row - top];
+				for( int column = left; column < left + width; column++ ) {
+					TPressure current = relaxationSource[column, row]!;
+					Direction sourceConnectivity = connectivity[column, row];
+					float neighborSum = 0f;
+					int neighborCount = 0;
+					if( sourceConnectivity != Direction.None ) {
+						foreach( (int deltaColumn, int deltaRow, Direction direction, float _, float _) in _neighborDeltas ) {
+							NeighborKind kind = GetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow );
+							if( kind == NeighborKind.Cell ) {
+								neighborSum += projection.GetPressure( relaxationSource[neighborColumn, neighborRow]! );
+								neighborCount++;
+							} else if( kind == NeighborKind.Outside ) {
+								// Open edge to nothingness: fixed zero (Dirichlet) pressure.
+								neighborCount++;
+							}
+						}
+					}
+
+					if( neighborCount == 0 ) {
+						relaxationDestination[column, row] = current;
+						continue;
+					}
+
+					float updated = ( neighborSum - rhsRow[column - left] ) / neighborCount;
+					float delta = updated - projection.GetPressure( current );
+					relaxationDestination[column, row] = projection.Apply( new GridCell<TPressure>( column, row, current ), delta );
+				}
+			}
 
 			( relaxationSource, relaxationDestination ) = ( relaxationDestination, relaxationSource );
 		}
@@ -152,8 +181,13 @@ public sealed class GridProjection : IGridProjection {
 		int width,
 		int height
 	) {
-		if( TryGetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow ) ) {
+		NeighborKind kind = GetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow );
+		if( kind == NeighborKind.Cell ) {
 			return velocity[neighborColumn, neighborRow];
+		}
+		if( kind == NeighborKind.Outside ) {
+			// Open edge: zero-gradient outflow, the flow simply leaves the domain.
+			return sourceVelocity;
 		}
 
 		float normalComponent = ( sourceVelocity.X * unitX ) + ( sourceVelocity.Y * unitY );
@@ -186,8 +220,11 @@ public sealed class GridProjection : IGridProjection {
 			// cell's own pressure, contributing no gradient in that direction rather than being
 			// omitted from the average.
 			float neighborPressure = sourcePressure;
-			if( TryGetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow ) ) {
+			NeighborKind kind = GetNeighbor( sourceConnectivity, direction, column, row, deltaColumn, deltaRow, left, top, width, height, out int neighborColumn, out int neighborRow );
+			if( kind == NeighborKind.Cell ) {
 				neighborPressure = projection.GetPressure( pressure[neighborColumn, neighborRow]! );
+			} else if( kind == NeighborKind.Outside ) {
+				neighborPressure = 0f;
 			}
 
 			float delta = neighborPressure - sourcePressure;
@@ -199,7 +236,15 @@ public sealed class GridProjection : IGridProjection {
 	}
 
 
-	private static bool TryGetNeighbor(
+	private enum NeighborKind {
+		Wall,
+		Cell,
+		Outside
+	}
+
+	// An unflagged edge is a hard wall that reflects. A flagged edge that leads off the
+	// grid is open to nothingness: pressure and flow pass out and are lost.
+	private static NeighborKind GetNeighbor(
 		Direction sourceConnectivity,
 		Direction direction,
 		int column,
@@ -217,7 +262,7 @@ public sealed class GridProjection : IGridProjection {
 		neighborRow = row + deltaRow;
 
 		if( !sourceConnectivity.HasFlag( direction ) ) {
-			return false;
+			return NeighborKind.Wall;
 		}
 
 		if( neighborColumn < left
@@ -225,10 +270,10 @@ public sealed class GridProjection : IGridProjection {
 			|| neighborRow < top
 			|| neighborRow >= top + height
 		) {
-			return false;
+			return NeighborKind.Outside;
 		}
 
-		return true;
+		return NeighborKind.Cell;
 	}
 
 }

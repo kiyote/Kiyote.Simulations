@@ -25,7 +25,7 @@ public sealed class GridDiffusionTests {
 		// Encloses a 3x3 interior box (columns/rows 4-6) inside the 10x10 grid, walled
 		// off from the rest of the domain, so anything seeded inside can never diffuse
 		// out to cells outside the box.
-		_boundaryConnectivityStrategy = new BoundaryFloatConnectivityStrategy( 3, 3, 4, 4 );
+		_boundaryConnectivityStrategy = new BoundaryFloatConnectivityStrategy( 3, 3, 5, 5 );
 		_diffusion = new GridDiffusion();
 		_flow = new FloatDiffusionStrategy();
 	}

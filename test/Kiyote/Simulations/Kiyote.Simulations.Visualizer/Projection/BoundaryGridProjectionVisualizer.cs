@@ -59,10 +59,8 @@ internal sealed class BoundaryGridProjectionVisualizer {
 		connectivity.TryAttach( inputPressure, 0, 0 );
 		connectivity.UpdateConnectivity( _connectivityStrategy );
 
-		IMutableGrid<float> pressure = inputPressure;
-		pressure[95, 5] = 1000f;
-		pressure[50, 50] = 1000f;
-
+		// The projection pressure field is solved from the velocity divergence each
+		// call, so only the velocity is seeded.
 		IMutableGrid<Velocity> velocity = inputVelocity;
 		velocity[95, 5] = new Velocity( -10, -10 );
 		velocity[50, 50] = new Velocity( 5, 0 );

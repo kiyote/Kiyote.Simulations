@@ -32,12 +32,12 @@ internal sealed class GridProjectionTests {
 		// off from the rest of the domain, so the seeded pressure/velocity below can
 		// never reach cells outside the box - unlike OpenFloatConnectivityStrategy,
 		// where only the domain's own outer edge reflects.
-		_boundaryConnectivityStrategy = new BoundaryFloatConnectivityStrategy( 3, 3, 4, 4 );
+		_boundaryConnectivityStrategy = new BoundaryFloatConnectivityStrategy( 3, 3, 5, 5 );
 		_floatProjectionStrategy = new FloatProjectionStrategy();
 		_clock = new SimulationClock();
 		_diffusion = new GridDiffusion();
 		_pressure = new GridPressure( _diffusion, _clock );
-		_projection = new GridProjection( _pressure );
+		_projection = new GridProjection();
 	}
 
 	[SetUp]
@@ -60,27 +60,79 @@ internal sealed class GridProjectionTests {
 	public void Update_OpenConnectivity_CorrectFieldCalculated() {
 		// Arrange
 		_sourceVelocity[5, 5] = new Velocity( 1.0f, 0.0f );
-		_sourcePressure[5, 5] = 1000f;
 
 		// Act
 		_projection.Update( _openConnectivity, _sourceVelocity, _destinationVelocity, _sourcePressure, _destinationPressure, _floatProjectionStrategy );
 
 		// Assert
 		using( Assert.EnterMultipleScope() ) {
-			// The seeded cell's velocity should be adjusted by the pressure gradient
-			// produced from its own seeded pressure value.
-			Assert.That( _destinationVelocity[5, 5], Is.Not.EqualTo( _sourceVelocity[5, 5] ) );
+			// Projection removes the divergent part of the isolated impulse, so the
+			// seeded cell keeps a reduced, same-direction velocity.
+			Assert.That( _destinationVelocity[5, 5].X, Is.GreaterThan( 0f ).And.LessThan( 1f ) );
 
-			// Unlike the boundary-connectivity case below, nothing walls off cell (8, 5)
-			// from the seeded cell, so after relaxation some (even if small) amount of
-			// pressure signal reaches it, nudging its velocity away from its original value.
+			// Nothing walls off cell (8, 5), so the (global) pressure correction
+			// nudges its velocity away from its original value.
 			Assert.That( _destinationVelocity[8, 5], Is.Not.EqualTo( _sourceVelocity[8, 5] ) );
 
-			// Cells far from the seeded location receive only a negligible pressure
-			// signal after relaxation, so their velocity should be effectively unchanged.
-			AssertVelocityUnchanged( 9, 9 );
-			AssertVelocityUnchanged( 0, 0 );
+			// The Poisson solve is non-local, so distant cells pick up a small return
+			// flow, but it must stay much weaker than the seeded impulse.
+			AssertVelocityBelow( 9, 9, 0.1f );
+			AssertVelocityBelow( 0, 0, 0.1f );
 		}
+	}
+
+	[Test]
+	public void Update_RepeatedCalls_VelocityRemainsBounded() {
+		// Arrange - regression for the projection amplifying divergence on every
+		// call (previously ~doubling every 20 calls and reaching NaN by ~360).
+		const int size = 100;
+		IMutableGrid<float> sourcePressure = new RaggedArrayGrid<float>( size, size );
+		IMutableGrid<float> destinationPressure = new RaggedArrayGrid<float>( size, size );
+		IConnectivityGrid<float> connectivity = new ConnectivityGrid<float>();
+		connectivity.TryAttach( sourcePressure, 0, 0 );
+		connectivity.UpdateConnectivity( _openConnectivityStrategy );
+
+		IMutableGrid<Velocity> sourceVelocity = new RaggedArrayGrid<Velocity>( size, size );
+		IMutableGrid<Velocity> destinationVelocity = new RaggedArrayGrid<Velocity>( size, size );
+		sourceVelocity[95, 5] = new Velocity( -10, -10 );
+		sourceVelocity[50, 50] = new Velocity( 5, 0 );
+		float initialMax = MaxMagnitude( sourceVelocity, size );
+
+		// Act
+		for( int i = 0; i < 400; i++ ) {
+			_projection.Update( connectivity, sourceVelocity, destinationVelocity, sourcePressure, destinationPressure, _floatProjectionStrategy );
+			( sourceVelocity, destinationVelocity ) = ( destinationVelocity, sourceVelocity );
+		}
+
+		// Assert
+		float finalMax = MaxMagnitude( sourceVelocity, size );
+		Assert.That( float.IsFinite( finalMax ), Is.True );
+		Assert.That( finalMax, Is.LessThanOrEqualTo( initialMax ) );
+	}
+
+	private static float MaxMagnitude(
+		IGrid<Velocity> velocity,
+		int size
+	) {
+		float max = 0f;
+		for( int row = 0; row < size; row++ ) {
+			for( int column = 0; column < size; column++ ) {
+				float magnitude = velocity[column, row].Magnitude;
+				if( !float.IsFinite( magnitude ) ) {
+					return magnitude;
+				}
+				max = Math.Max( max, magnitude );
+			}
+		}
+		return max;
+	}
+
+	private void AssertVelocityBelow(
+		int column,
+		int row,
+		float limit
+	) {
+		Assert.That( _destinationVelocity[column, row].Magnitude, Is.LessThan( limit ), $"Cell ({column}, {row})" );
 	}
 
 	[Test]

@@ -5,7 +5,7 @@ using Kiyote.Geometry.Grids;
 using Kiyote.Geometry.Grids.Connectivity;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
-
+/*
 public class GridAtmospherics<TCell> : IGridAtmospherics<TCell> {
 
 	private static readonly Vector[] _directions =
@@ -29,3 +29,4 @@ public class GridAtmospherics<TCell> : IGridAtmospherics<TCell> {
 		throw new NotImplementedException();
 	}
 }
+*/

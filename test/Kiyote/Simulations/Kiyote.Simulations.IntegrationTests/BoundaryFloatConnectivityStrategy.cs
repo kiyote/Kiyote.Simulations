@@ -35,9 +35,10 @@ internal sealed class BoundaryFloatConnectivityStrategy : IConnectivityStrategy<
 	private bool IsPassable(
 		GridCell<float> cell
 	) {
+		// The outermost ring of the rectangle (all four sides) is the wall.
 		return cell.Column > _left
-			&& cell.Column < _left + _width
+			&& cell.Column < _left + _width - 1
 			&& cell.Row > _top
-			&& cell.Row < _top + _height;
+			&& cell.Row < _top + _height - 1;
 	}
 }

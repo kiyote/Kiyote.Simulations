@@ -29,7 +29,7 @@ public class GridProjectionBenchmarks {
 		_clock = new SimulationClock();
 		_diffusion = new GridDiffusion();
 		_pressure = new GridPressure( _diffusion, _clock );
-		_projection = new GridProjection( _pressure );
+		_projection = new GridProjection();
 		_inputPressure = new RaggedArrayGrid<float>( 100, 100 );
 		_outputPressure = new RaggedArrayGrid<float>( 100, 100 );
 		_inputVelocity = new RaggedArrayGrid<Velocity>( 100, 100 );

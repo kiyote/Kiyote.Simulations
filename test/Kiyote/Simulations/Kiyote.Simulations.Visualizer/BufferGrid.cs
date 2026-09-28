@@ -31,6 +31,8 @@ internal sealed class BufferGrid<T> : INumericBuffer<T>, IMutableGrid<T> where T
 
 	int IGrid<T>.Height => _buffer.Rows;
 
+	int IGrid<T>.Version => 0;
+
 	T IMutableGrid<T>.this[int column, int row] { get => _buffer[column, row]; set => _buffer[column, row] = value; }
 
 	T IGrid<T>.this[int column, int row] => _buffer[column, row];

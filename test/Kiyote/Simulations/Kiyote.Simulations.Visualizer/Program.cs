@@ -2,6 +2,7 @@ using Kiyote.Buffers;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
 using Kiyote.Simulations.Visualizer.Advection;
+using Kiyote.Simulations.Visualizer.Airflow;
 using Kiyote.Simulations.Visualizer.Diffusion;
 using Kiyote.Simulations.Visualizer.Pressure;
 using Kiyote.Simulations.Visualizer.Projection;
@@ -28,7 +29,8 @@ internal sealed class Program {
 			.AddSingleton<GridPressureVisualizer>()
 			.AddSingleton<OpenGridProjectionVisualizer>()
 			.AddSingleton<BoundaryGridProjectionVisualizer>()
-			.AddSingleton<GridAdvectionVisualizer>();
+			.AddSingleton<GridAdvectionVisualizer>()
+			.AddSingleton<GridAirflowVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
@@ -55,6 +57,11 @@ internal sealed class Program {
 		Console.Write( "Grid Advection..." );
 		GridAdvectionVisualizer gridAdvectionVisualizer = services.GetRequiredService<GridAdvectionVisualizer>();
 		gridAdvectionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
+		Console.Write( "Grid Airflow..." );
+		GridAirflowVisualizer gridAirflowVisualizer = services.GetRequiredService<GridAirflowVisualizer>();
+		gridAirflowVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 	}
 
