@@ -20,7 +20,12 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # GridPressure
 | Method | Mean     | Error     | StdDev    | Allocated |
 |------- |---------:|----------:|----------:|----------:|
-| Update | 1.104 ms | 0.0275 ms | 0.0244 ms |      10 B |
+| Update | 1.151 ms | 0.0281 ms | 0.0234 ms |         - |
+
+# Vectorized.GridPressure
+| Method | Mean     | Error    | StdDev   | Allocated |
+|------- |---------:|---------:|---------:|----------:|
+| Update | 27.36 us | 0.558 us | 0.522 us |         - |
 
 # GridProjection
 | Method | Mean     | Error    | StdDev   | Allocated |

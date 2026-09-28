@@ -31,7 +31,8 @@ internal sealed class Program {
 			.AddSingleton<BoundaryGridProjectionVisualizer>()
 			.AddSingleton<GridAdvectionVisualizer>()
 			.AddSingleton<GridAirflowVisualizer>()
-			.AddSingleton<Vectorized.Diffusion.GridDiffusionVisualizer>();
+			.AddSingleton<Vectorized.Diffusion.GridDiffusionVisualizer>()
+			.AddSingleton<Vectorized.Pressure.GridPressureVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
@@ -45,11 +46,17 @@ internal sealed class Program {
 		vectorizedDiffusionVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 
-		/*
 		Console.Write( "Pressure..." );
 		GridPressureVisualizer gridPressureVisualizer = services.GetRequiredService<GridPressureVisualizer>();
 		gridPressureVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
+
+		Console.Write( "Vectorized Pressure..." );
+		Vectorized.Pressure.GridPressureVisualizer vectorizedPressureVisualizer = services.GetRequiredService<Vectorized.Pressure.GridPressureVisualizer>();
+		vectorizedPressureVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
+		/*
 		
 		Console.Write( "Open Grid Projection..." );
 		OpenGridProjectionVisualizer openProjectionVisualizer = services.GetRequiredService<OpenGridProjectionVisualizer>();
