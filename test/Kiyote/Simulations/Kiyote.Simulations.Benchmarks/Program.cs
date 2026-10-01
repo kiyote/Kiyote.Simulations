@@ -21,20 +21,25 @@ public static class Program {
 			.FromTypes( [
 				typeof( Diffusion.GridDiffusionBenchmarks ),
 				typeof( Vectorized.Diffusion.GridDiffusionBenchmarks ),
+				typeof( Topology.Diffusion.GridDiffusionBenchmarks ),
 
 				typeof( Pressure.GridPressureBenchmarks ),
 				typeof( Vectorized.Pressure.GridPressureBenchmarks ),
+				typeof( Topology.Pressure.GridPressureBenchmarks ),
 
 				typeof( Projection.GridProjectionBenchmarks ),
 				typeof( Vectorized.Projection.GridProjectionBenchmarks ),
+				typeof( Topology.Projection.GridProjectionBenchmarks ),
 
 				typeof( Advection.GridAdvectionBenchmarks ),
 				typeof( Vectorized.Advection.GridAdvectionBenchmarks ),
+				typeof( Topology.Advection.GridAdvectionBenchmarks ),
 
 				typeof( Airflow.GridAirflowBenchmarks ),
 				typeof( Vectorized.Airflow.GridAirflowBenchmarks ),
+				typeof( Topology.Airflow.GridAirflowBenchmarks ),
 			] )
-			.RunAll( config, args );
+			.Run( args, config );
 	}
 
 }

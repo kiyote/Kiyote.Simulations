@@ -17,6 +17,11 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 |------- |---------:|---------:|---------:|----------:|
 | Update | 26.44 us | 0.194 us | 0.172 us |         - |
 
+# Topology.GridDiffusion
+| Method | Mean     | Error   | StdDev  | Allocated |
+|------- |---------:|--------:|--------:|----------:|
+| Update | 25.04 us | 1.397 us | 1.306 us |         - |
+
 # GridPressure
 | Method | Mean     | Error     | StdDev    | Allocated |
 |------- |---------:|----------:|----------:|----------:|
@@ -26,6 +31,11 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 | Method | Mean     | Error    | StdDev   | Allocated |
 |------- |---------:|---------:|---------:|----------:|
 | Update | 27.36 us | 0.558 us | 0.522 us |         - |
+
+# Topology.GridPressure
+| Method | Mean     | Error    | StdDev   | Allocated |
+|------- |---------:|---------:|---------:|----------:|
+| Update | 23.68 us | 0.390 us | 0.346 us |         - |
 
 # GridProjection
 | Method | Mean     | Error    | StdDev   | Allocated |
@@ -37,6 +47,11 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 |------- |---------:|----------:|----------:|----------:|
 | Update | 1.063 ms | 0.0336 ms | 0.0314 ms |       9 B |
 
+# Topology.GridProjection
+| Method | Mean     | Error   | StdDev  | Allocated |
+|------- |---------:|--------:|--------:|----------:|
+| Update | 573.4 us | 5.21 us | 4.62 us |       6 B |
+
 # GridAdvection
 | Method | Mean     | Error   | StdDev  | Allocated |
 |------- |---------:|--------:|--------:|----------:|
@@ -47,6 +62,11 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 |------- |---------:|--------:|--------:|----------:|
 | Update | 135.1 us | 1.95 us | 1.63 us |       1 B |
 
+# Topology.GridAdvection
+| Method | Mean     | Error   | StdDev  | Allocated |
+|------- |---------:|--------:|--------:|----------:|
+| Update | 57.24 us | 2.381 us | 2.227 us |         - |
+
 # GridAirflow
 | Method | Mean     | Error    | StdDev   | Allocated |
 |------- |---------:|---------:|---------:|----------:|
@@ -56,3 +76,8 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 | Method | Mean     | Error     | StdDev    | Allocated |
 |------- |---------:|----------:|----------:|----------:|
 | Update | 1.425 ms | 0.0316 ms | 0.0296 ms |      10 B |
+
+# Topology.GridAirflow
+| Method | Mean     | Error     | StdDev    | Allocated |
+|------- |---------:|----------:|----------:|----------:|
+| Update | 892.5 us | 36.53 us | 34.17 us |       6 B |
