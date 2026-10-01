@@ -31,10 +31,15 @@ internal sealed class Program {
 			.AddSingleton<GridAdvectionVisualizer>()
 			.AddSingleton<GridAirflowVisualizer>()
 			.AddSingleton<Vectorized.Diffusion.GridDiffusionVisualizer>()
+			.AddSingleton<Topology.Diffusion.GridDiffusionVisualizer>()
 			.AddSingleton<Vectorized.Pressure.GridPressureVisualizer>()
+			.AddSingleton<Topology.Pressure.GridPressureVisualizer>()
 			.AddSingleton<Vectorized.Projection.GridProjectionVisualizer>()
+			.AddSingleton<Topology.Projection.GridProjectionVisualizer>()
 			.AddSingleton<Vectorized.Advection.GridAdvectionVisualizer>()
-			.AddSingleton<Vectorized.Airflow.GridAirflowVisualizer>();
+			.AddSingleton<Topology.Advection.GridAdvectionVisualizer>()
+			.AddSingleton<Vectorized.Airflow.GridAirflowVisualizer>()
+			.AddSingleton<Topology.Airflow.GridAirflowVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
@@ -48,6 +53,11 @@ internal sealed class Program {
 		vectorizedDiffusionVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 
+		Console.Write( "Topology Diffusion..." );
+		Topology.Diffusion.GridDiffusionVisualizer topologyDiffusionVisualizer = services.GetRequiredService<Topology.Diffusion.GridDiffusionVisualizer>();
+		topologyDiffusionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
 		Console.Write( "Pressure..." );
 		GridPressureVisualizer gridPressureVisualizer = services.GetRequiredService<GridPressureVisualizer>();
 		gridPressureVisualizer.Execute( outputFolder );
@@ -56,6 +66,11 @@ internal sealed class Program {
 		Console.Write( "Vectorized Pressure..." );
 		Vectorized.Pressure.GridPressureVisualizer vectorizedPressureVisualizer = services.GetRequiredService<Vectorized.Pressure.GridPressureVisualizer>();
 		vectorizedPressureVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
+		Console.Write( "Topology Pressure..." );
+		Topology.Pressure.GridPressureVisualizer topologyPressureVisualizer = services.GetRequiredService<Topology.Pressure.GridPressureVisualizer>();
+		topologyPressureVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 
 		Console.Write( "Projection..." );
@@ -68,6 +83,11 @@ internal sealed class Program {
 		vectorizedProjectionVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 
+		Console.Write( "Topology Projection..." );
+		Topology.Projection.GridProjectionVisualizer topologyProjectionVisualizer = services.GetRequiredService<Topology.Projection.GridProjectionVisualizer>();
+		topologyProjectionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
 		Console.Write( "Advection..." );
 		GridAdvectionVisualizer gridAdvectionVisualizer = services.GetRequiredService<GridAdvectionVisualizer>();
 		gridAdvectionVisualizer.Execute( outputFolder );
@@ -78,6 +98,11 @@ internal sealed class Program {
 		vectorizedAdvectionVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 
+		Console.Write( "Topology Advection..." );
+		Topology.Advection.GridAdvectionVisualizer topologyAdvectionVisualizer = services.GetRequiredService<Topology.Advection.GridAdvectionVisualizer>();
+		topologyAdvectionVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
 		Console.Write( "Airflow..." );
 		GridAirflowVisualizer gridAirflowVisualizer = services.GetRequiredService<GridAirflowVisualizer>();
 		gridAirflowVisualizer.Execute( outputFolder );
@@ -85,6 +110,11 @@ internal sealed class Program {
 		Console.Write( "Vectorized Airflow..." );
 		Vectorized.Airflow.GridAirflowVisualizer vectorizedAirflowVisualizer = services.GetRequiredService<Vectorized.Airflow.GridAirflowVisualizer>();
 		vectorizedAirflowVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
+		Console.Write( "Topology Airflow..." );
+		Topology.Airflow.GridAirflowVisualizer topologyAirflowVisualizer = services.GetRequiredService<Topology.Airflow.GridAirflowVisualizer>();
+		topologyAirflowVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 	}
 
