@@ -1,32 +1,31 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-using Kiyote.Geometry.Grids;
-using Kiyote.Geometry.Grids.Connectivity;
+using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
-/*
-public class GridAtmospherics<TCell> : IGridAtmospherics<TCell> {
 
-	private static readonly Vector[] _directions =
-	[
-			new Vector(0f, 1f),						// 0: North
-            new Vector(0.7071068f, 0.7071068f),		// 1: North-East
-            new Vector(1f, 0f),						// 2: East
-            new Vector(0.7071068f, -0.7071068f),	// 3: South-East
-            new Vector(0f, -1f),					// 4: South
-            new Vector(-0.7071068f, -0.7071068f),	// 5: South-West
-            new Vector(-1f, 0f),					// 6: West
-            new Vector(-0.7071068f, 0.7071068f)		// 7: North-West
-	];
+public sealed class GridAtmospherics : IGridAtmospherics {
 
-	void IGridAtmospherics<TCell>.Update(
-		IGrid<TCell> grid,
-		IConnectivityGrid<TCell> connectivity,
-		IGrid<CellAtmosphere> input,
-		IGrid<CellAtmosphere> output
+	private readonly IGasRegistry _gases;
+	private readonly IAtmosphericsSettings _settings;
+	private readonly IGridCompiler _compiler;
+	private readonly IConnectivityBuilder _connectivityBuilder;
+
+	public GridAtmospherics(
+		IGasRegistry gases,
+		IAtmosphericsSettings settings,
+		IGridCompiler compiler,
+		IConnectivityBuilder connectivityBuilder
 	) {
-		throw new NotImplementedException();
+		_gases = gases;
+		_settings = settings;
+		_compiler = compiler;
+		_connectivityBuilder = connectivityBuilder;
 	}
+
+	IAtmosphere IGridAtmospherics.Create<TCell, TStrategy>(
+		IGridAssembly<TCell> ship,
+		TStrategy strategy
+	) {
+		return new Atmosphere<TCell, TStrategy>( ship, strategy, _gases, _settings, _compiler, _connectivityBuilder );
+	}
+
 }
-*/

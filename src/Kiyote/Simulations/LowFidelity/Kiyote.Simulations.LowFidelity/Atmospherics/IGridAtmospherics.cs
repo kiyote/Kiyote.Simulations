@@ -1,13 +1,12 @@
-using Kiyote.Geometry.Grids;
-using Kiyote.Geometry.Grids.Connectivity;
+using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 
-public interface IGridAtmospherics<TCell> {
+public interface IGridAtmospherics {
 
-	void Update(
-		IGrid<TCell> grid,
-		IConnectivityGrid<TCell> connectivity
-	);
+	IAtmosphere Create<TCell, TStrategy>(
+		IGridAssembly<TCell> ship,
+		TStrategy strategy
+	) where TStrategy : struct, IAtmosphereCellStrategy<TCell>;
 
 }
