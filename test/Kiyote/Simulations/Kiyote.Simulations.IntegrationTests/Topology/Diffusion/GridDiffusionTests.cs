@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Geometry.Topology;
-using Kiyote.Simulations.Topology.Diffusion;
 
 namespace Kiyote.Simulations.Topology.Diffusion.IntegrationTests;
 
