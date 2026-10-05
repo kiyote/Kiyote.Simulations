@@ -1,4 +1,4 @@
-namespace Kiyote.Simulations.LowFidelity.Atmospherics;
+namespace Kiyote.Simulations.LowFidelity;
 
 public struct Vector : IEquatable<Vector> {
 	public float X { get; set; }

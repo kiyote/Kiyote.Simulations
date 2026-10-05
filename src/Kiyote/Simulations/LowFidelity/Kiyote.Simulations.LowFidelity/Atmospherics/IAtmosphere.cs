@@ -42,6 +42,15 @@ public interface IAtmosphere : IDisposable {
 		TimeSpan elapsed
 	);
 
+	// Safe to call from one reader thread while another thread calls Advance.
+	// Returns the most recently published frame, which the simulation will not touch until
+	// a later AcquireFrame swaps it out.  Only one frame may be held at a time.
+	IAtmosphereFrame AcquireFrame();
+
+	void ReleaseFrame(
+		IAtmosphereFrame frame
+	);
+
 	// Copies values back into the cells.
 	void Commit();
 

@@ -6,15 +6,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Kiyote.Buffers" />
-    <PackageReference Include="Kiyote.Buffers.Numerics" />
+    <PackageReference Include="Microsoft.VisualStudio.DiagnosticsHub.BenchmarkDotNetDiagnosers" />
     <PackageReference Include="Kiyote.Geometry" />
-    <PackageReference Include="Kiyote.Imaging" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\Kiyote\Simulations\Kiyote.Simulations\Kiyote.Simulations.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Kiyote\Simulations\LowFidelity\Kiyote.Simulations.LowFidelity\Kiyote.Simulations.LowFidelity.csproj" />
   </ItemGroup>
 
 </Project>

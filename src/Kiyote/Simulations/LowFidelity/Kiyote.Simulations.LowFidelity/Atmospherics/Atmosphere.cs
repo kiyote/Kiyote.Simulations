@@ -1,19 +1,17 @@
-using System.Numerics;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
+using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 
 internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	where TStrategy : struct, IAtmosphereCellStrategy<TCell> {
 
-	private const int ChunkSize = 16;
 	private const int Halo = 1;
-	private const float ReferenceTemperature = 293.15f;
 	private const float MinimumTemperature = 2.7f;
-	private const float Epsilon = 1e-4f;
 	private const float FullRebuildCoverage = 0.25f;
-	private const Direction Cardinal = Direction.North | Direction.East | Direction.South | Direction.West;
+	private const int FrameIndexMask = 0b11;
+	private const int FrameFresh = 0b100;
 
 	private static readonly Direction[] Neighbours = [
 		Direction.North,
@@ -32,8 +30,17 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private readonly IAtmosphericsSettings _settings;
 	private readonly IGridCompiler _compiler;
 	private readonly IConnectivityBuilder _connectivityBuilder;
+	private readonly IAtmospherePressure _pressureStage;
+	private readonly IAtmosphereAcceleration _acceleration;
+	private readonly IAtmosphereLimiter _limiter;
+	private readonly IAtmosphereTransport _transport;
+	private readonly IAtmosphereThermal _thermal;
+	private readonly IAtmosphereCondensation _condensation;
+	private readonly IAtmosphereWind _wind;
 	private readonly List<Rect> _pendingAreas;
 	private readonly List<int> _work;
+	private readonly float[] _outgoing;
+	private readonly float[] _newTotal;
 	private bool _pendingFullRebuild;
 	private float _accumulator;
 	private float _vented;
@@ -58,6 +65,16 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private IGridLayer<Direction> _vacuum;
 	private bool[] _active;
 	private bool[] _processed;
+	private bool[] _publish;
+
+	// Triple buffer: the simulation owns _frames[_frameBack], the reader owns _frames[_frameFront],
+	// and _frameShared holds the index of the third plus FrameFresh when it is newer than the reader's.
+	private AtmosphereFrame[] _frames;
+	private int _frameBack;
+	private int _frameShared;
+	private int _frameFront;
+	private bool _frameHeld;
+	private long _stepCount;
 
 	public Atmosphere(
 		IGridAssembly<TCell> assembly,
@@ -65,7 +82,14 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		IGasRegistry gases,
 		IAtmosphericsSettings settings,
 		IGridCompiler compiler,
-		IConnectivityBuilder connectivityBuilder
+		IConnectivityBuilder connectivityBuilder,
+		IAtmospherePressure pressureStage,
+		IAtmosphereAcceleration acceleration,
+		IAtmosphereLimiter limiter,
+		IAtmosphereTransport transport,
+		IAtmosphereThermal thermal,
+		IAtmosphereCondensation condensation,
+		IAtmosphereWind wind
 	) {
 		_assembly = assembly;
 		_strategy = strategy;
@@ -73,10 +97,20 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		_settings = settings;
 		_compiler = compiler;
 		_connectivityBuilder = connectivityBuilder;
+		_pressureStage = pressureStage;
+		_acceleration = acceleration;
+		_limiter = limiter;
+		_transport = transport;
+		_thermal = thermal;
+		_condensation = condensation;
+		_wind = wind;
 		_pendingAreas = [];
 		_work = [];
+		_outgoing = new float[ChunkSize * ChunkSize];
+		_newTotal = new float[ChunkSize * ChunkSize];
 		_active = [];
 		_processed = [];
+		_publish = [];
 		Compile();
 	}
 
@@ -144,6 +178,27 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		Publish();
 
 		return steps;
+	}
+
+	IAtmosphereFrame IAtmosphere.AcquireFrame() {
+		if( _frameHeld ) {
+			throw new InvalidOperationException( "A frame is already held; release it before acquiring another." );
+		}
+		if( ( Volatile.Read( ref _frameShared ) & FrameFresh ) != 0 ) {
+			_frameFront = Interlocked.Exchange( ref _frameShared, _frameFront ) & FrameIndexMask;
+		}
+		_frameHeld = true;
+		return _frames[_frameFront];
+	}
+
+	void IAtmosphere.ReleaseFrame(
+		IAtmosphereFrame frame
+	) {
+		ArgumentNullException.ThrowIfNull( frame );
+		if( !_frameHeld ) {
+			throw new InvalidOperationException( "No frame is held." );
+		}
+		_frameHeld = false;
 	}
 
 	void IAtmosphere.Commit() {
@@ -281,7 +336,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		nameof( _compiled ), nameof( _gas ), nameof( _gasNext ), nameof( _condensate ),
 		nameof( _temperature ), nameof( _temperatureNext ), nameof( _total ), nameof( _pressure ),
 		nameof( _flowEast ), nameof( _flowSouth ), nameof( _vent ), nameof( _scale ),
-		nameof( _windX ), nameof( _windY ), nameof( _permeable ), nameof( _connectivity ), nameof( _vacuum )
+		nameof( _windX ), nameof( _windY ), nameof( _permeable ), nameof( _connectivity ), nameof( _vacuum ), nameof( _frames )
 	)]
 	private void Compile() {
 		_compiled = _compiler.Compile( _assembly, ChunkSize );
@@ -314,10 +369,21 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 
 		_active = new bool[_compiled.ChunkLayout.SlotCount];
 		_processed = new bool[_active.Length];
+		_publish = new bool[_active.Length];
 		Array.Fill( _active, true );
+		Array.Fill( _publish, true );
 		_pendingAreas.Clear();
 		_pendingFullRebuild = false;
+		_frames = [CreateFrame(), CreateFrame(), CreateFrame()];
+		_frameBack = 0;
+		_frameShared = 1;
+		_frameFront = 2;
+		_frameHeld = false;
 		Publish();
+	}
+
+	private AtmosphereFrame CreateFrame() {
+		return new AtmosphereFrame( _gases, _compiled.ChunkLayout, _temperature, _condensate );
 	}
 
 	private void EnsureSlotCapacity() {
@@ -328,7 +394,9 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		int previous = _active.Length;
 		Array.Resize( ref _active, slots );
 		Array.Resize( ref _processed, slots );
+		Array.Resize( ref _publish, slots );
 		Array.Fill( _active, true, previous, slots - previous );
+		Array.Fill( _publish, true, previous, slots - previous );
 	}
 
 	private void ApplyTopologyChanges() {
@@ -350,6 +418,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			_compiled.RemoveLayer( _connectivity );
 			_connectivity = _connectivityBuilder.Build( _compiled, connectivity, Halo );
 			Array.Fill( _active, true );
+			Array.Fill( _publish, true );
 		} else {
 			foreach( Rect area in _pendingAreas ) {
 				_connectivityBuilder.Update( _compiled, _connectivity, connectivity, area );
@@ -383,9 +452,22 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private void Step(
 		float dt
 	) {
+		_stepCount++;
 		BuildWorkSet();
 		if( _work.Count == 0 ) {
 			return;
+		}
+
+		// Wind in neighbouring chunks reads these chunks' flows through the halo.
+		IGridChunkLayout layout = _compiled.ChunkLayout;
+		foreach( int slot in _work ) {
+			_publish[slot] = true;
+			foreach( Direction direction in Neighbours ) {
+				int neighbour = layout.GetNeighbour( slot, direction );
+				if( neighbour >= 0 ) {
+					_publish[neighbour] = true;
+				}
+			}
 		}
 
 		foreach( int slot in _work ) {
@@ -396,7 +478,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		}
 
 		foreach( int slot in _work ) {
-			ComputePressure( slot );
+			_pressureStage.Compute( slot, layout.GetValidityMask( slot ), _gas, _temperature, _total, _pressure );
 		}
 		ExchangeHalos( _total );
 		ExchangeHalos( _pressure );
@@ -408,12 +490,12 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		ExchangeHalos( _flowSouth );
 
 		foreach( int slot in _work ) {
-			ComputeScale( slot, dt );
+			_limiter.ComputeScale( slot, layout.GetValidityMask( slot ), dt, _total, _flowEast, _flowSouth, _vent, _scale );
 		}
 		ExchangeHalos( _scale );
 
 		foreach( int slot in _work ) {
-			LimitFlows( slot );
+			_limiter.Limit( slot, layout.GetValidityMask( slot ), _flowEast, _flowSouth, _vent, _scale );
 		}
 		ExchangeHalos( _flowEast );
 		ExchangeHalos( _flowSouth );
@@ -476,113 +558,26 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		}
 	}
 
-	private void ComputePressure(
-		int slot
-	) {
-		Span<float> total = _total.Cells;
-		Span<float> pressure = _pressure.Cells;
-		Span<float> temperature = _temperature.Cells;
-		ReadOnlySpan<ulong> mask = _compiled.ChunkLayout.GetValidityMask( slot );
-		for( int local = 0; local < ChunkSize * ChunkSize; local++ ) {
-			if( !IsValid( mask, local ) ) {
-				continue;
-			}
-			int i = ToIndex( slot, local );
-			float sum = GetTotal( i );
-			total[i] = sum;
-			pressure[i] = sum * temperature[i] / ReferenceTemperature;
-		}
-	}
-
 	private void AccelerateFlows(
 		int slot,
 		float dt
 	) {
 		IGridChunkLayout layout = _compiled.ChunkLayout;
-		bool eastOpen = IsProcessed( layout.GetNeighbour( slot, Direction.East ) );
-		bool southOpen = IsProcessed( layout.GetNeighbour( slot, Direction.South ) );
-		int stride = _pressure.Stride;
-		float k = _settings.Acceleration * dt;
-		float damp = MathF.Max( 0.0f, 1.0f - ( _settings.Friction * dt ) );
-
-		Span<float> pressure = _pressure.Cells;
-		Span<float> flowEast = _flowEast.Cells;
-		Span<float> flowSouth = _flowSouth.Cells;
-		Span<float> vent = _vent.Cells;
-		Span<Direction> connectivity = _connectivity.Cells;
-		Span<Direction> vacuum = _vacuum.Cells;
-		Span<bool> permeable = _permeable.Cells;
-		ReadOnlySpan<ulong> mask = layout.GetValidityMask( slot );
-
-		for( int local = 0; local < ChunkSize * ChunkSize; local++ ) {
-			if( !IsValid( mask, local ) ) {
-				continue;
-			}
-			int i = ToIndex( slot, local );
-			int lx = local % ChunkSize;
-			int ly = local / ChunkSize;
-			Direction open = connectivity[i];
-
-			flowEast[i] = ( open & Direction.East ) != 0 && ( lx < ChunkSize - 1 || eastOpen )
-				? ( flowEast[i] + ( k * ( pressure[i] - pressure[i + 1] ) ) ) * damp
-				: 0.0f;
-			flowSouth[i] = ( open & Direction.South ) != 0 && ( ly < ChunkSize - 1 || southOpen )
-				? ( flowSouth[i] + ( k * ( pressure[i] - pressure[i + stride] ) ) ) * damp
-				: 0.0f;
-
-			int faces = permeable[i] ? BitOperations.PopCount( (uint)( vacuum[i] & Cardinal ) ) : 0;
-			vent[i] = faces > 0
-				? MathF.Max( 0.0f, ( vent[i] + ( k * pressure[i] * faces ) ) * damp )
-				: 0.0f;
-		}
-	}
-
-	private void ComputeScale(
-		int slot,
-		float dt
-	) {
-		int stride = _flowEast.Stride;
-		Span<float> total = _total.Cells;
-		Span<float> flowEast = _flowEast.Cells;
-		Span<float> flowSouth = _flowSouth.Cells;
-		Span<float> vent = _vent.Cells;
-		Span<float> scale = _scale.Cells;
-		ReadOnlySpan<ulong> mask = _compiled.ChunkLayout.GetValidityMask( slot );
-
-		for( int local = 0; local < ChunkSize * ChunkSize; local++ ) {
-			if( !IsValid( mask, local ) ) {
-				continue;
-			}
-			int i = ToIndex( slot, local );
-			float outflow = MathF.Max( flowEast[i], 0.0f )
-				+ MathF.Max( flowSouth[i], 0.0f )
-				+ MathF.Max( -flowEast[i - 1], 0.0f )
-				+ MathF.Max( -flowSouth[i - stride], 0.0f )
-				+ vent[i];
-			outflow *= dt;
-			scale[i] = outflow > total[i] ? total[i] / outflow : 1.0f;
-		}
-	}
-
-	private void LimitFlows(
-		int slot
-	) {
-		int stride = _flowEast.Stride;
-		Span<float> flowEast = _flowEast.Cells;
-		Span<float> flowSouth = _flowSouth.Cells;
-		Span<float> vent = _vent.Cells;
-		Span<float> scale = _scale.Cells;
-		ReadOnlySpan<ulong> mask = _compiled.ChunkLayout.GetValidityMask( slot );
-
-		for( int local = 0; local < ChunkSize * ChunkSize; local++ ) {
-			if( !IsValid( mask, local ) ) {
-				continue;
-			}
-			int i = ToIndex( slot, local );
-			flowEast[i] *= flowEast[i] > 0.0f ? scale[i] : scale[i + 1];
-			flowSouth[i] *= flowSouth[i] > 0.0f ? scale[i] : scale[i + stride];
-			vent[i] *= scale[i];
-		}
+		_acceleration.Accelerate(
+			slot,
+			layout.GetValidityMask( slot ),
+			_settings.Acceleration * dt,
+			MathF.Max( 0.0f, 1.0f - ( _settings.Friction * dt ) ),
+			IsProcessed( layout.GetNeighbour( slot, Direction.East ) ),
+			IsProcessed( layout.GetNeighbour( slot, Direction.South ) ),
+			_pressure,
+			_flowEast,
+			_flowSouth,
+			_vent,
+			_connectivity,
+			_vacuum,
+			_permeable
+		);
 	}
 
 	// Returns whether the chunk is still changing.
@@ -590,177 +585,39 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		int slot,
 		float dt
 	) {
-		int stride = _flowEast.Stride;
+		ReadOnlySpan<ulong> mask = _compiled.ChunkLayout.GetValidityMask( slot );
 		float conduction = MathF.Min( _settings.Conduction * dt, 1.0f ) * 0.25f;
 		float condensation = MathF.Min( _settings.CondensationRate * dt, 1.0f );
-		Span<float> total = _total.Cells;
-		Span<float> temperature = _temperature.Cells;
-		Span<float> temperatureNext = _temperatureNext.Cells;
-		Span<float> flowEast = _flowEast.Cells;
-		Span<float> flowSouth = _flowSouth.Cells;
-		Span<float> vent = _vent.Cells;
-		Span<Direction> connectivity = _connectivity.Cells;
-		ReadOnlySpan<ulong> mask = _compiled.ChunkLayout.GetValidityMask( slot );
-		Span<int> donors = stackalloc int[4];
-		Span<float> moves = stackalloc float[4];
-		bool changing = false;
-
-		for( int local = 0; local < ChunkSize * ChunkSize; local++ ) {
-			if( !IsValid( mask, local ) ) {
-				continue;
-			}
-			int i = ToIndex( slot, local );
-
-			// Signed amount leaving the cell through each face; negative arrives from the neighbour.
-			moves[0] = flowEast[i] * dt;
-			donors[0] = i + 1;
-			moves[1] = flowSouth[i] * dt;
-			donors[1] = i + stride;
-			moves[2] = -flowEast[i - 1] * dt;
-			donors[2] = i - 1;
-			moves[3] = -flowSouth[i - stride] * dt;
-			donors[3] = i - stride;
-			float vented = vent[i] * dt;
-
-			float own = total[i];
-			float outgoing = vented;
-			float energy = 0.0f;
-			float incoming = 0.0f;
-			for( int f = 0; f < 4; f++ ) {
-				float move = moves[f];
-				if( move > 0.0f ) {
-					outgoing += move;
-				} else if( move < 0.0f ) {
-					incoming -= move;
-					energy -= move * temperature[donors[f]];
-				}
-			}
-
-			float newTotal = 0.0f;
-			for( int g = 0; g < _gas.Length; g++ ) {
-				Span<float> amounts = _gas[g].Cells;
-				float amount = amounts[i];
-				float next = amount;
-				if( own > 0.0f ) {
-					next -= outgoing * amount / own;
-				}
-				for( int f = 0; f < 4; f++ ) {
-					float move = moves[f];
-					int donor = donors[f];
-					if( move < 0.0f && total[donor] > 0.0f ) {
-						next -= move * amounts[donor] / total[donor];
-					}
-				}
-				next = MathF.Max( next, 0.0f );
-				_gasNext[g].Cells[i] = next;
-				newTotal += next;
-			}
-
-			float t = temperature[i];
-			float remaining = MathF.Max( own - outgoing, 0.0f );
-			float nextTemperature = newTotal > 0.0f
-				? ( ( remaining * t ) + energy ) / ( remaining + incoming )
-				: t;
-			if( newTotal > 0.0f && conduction > 0.0f ) {
-				Direction open = connectivity[i];
-				float exchange = 0.0f;
-				if( ( open & Direction.East ) != 0 ) {
-					exchange += temperature[i + 1] - t;
-				}
-				if( ( open & Direction.South ) != 0 ) {
-					exchange += temperature[i + stride] - t;
-				}
-				if( ( open & Direction.West ) != 0 ) {
-					exchange += temperature[i - 1] - t;
-				}
-				if( ( open & Direction.North ) != 0 ) {
-					exchange += temperature[i - stride] - t;
-				}
-				nextTemperature += conduction * exchange;
-			}
-			temperatureNext[i] = nextTemperature;
-
-			for( int g = 0; g < _gas.Length; g++ ) {
-				IGridLayer<float>? layer = _condensate[g];
-				if( layer is null ) {
-					continue;
-				}
-				float point = _gases.GetDefinition( new GasIndex( g ) ).CondensationPoint!.Value;
-				ref float gas = ref _gasNext[g].Cells[i];
-				ref float condensate = ref layer.Cells[i];
-				float phase = 0.0f;
-				if( nextTemperature < point ) {
-					phase = gas * condensation;
-				} else if( nextTemperature > point ) {
-					phase = -condensate * condensation;
-				}
-				if( phase != 0.0f ) {
-					gas -= phase;
-					condensate += phase;
-					layer.MarkDirty( slot );
-					if( MathF.Abs( phase ) > Epsilon ) {
-						changing = true;
-					}
-				}
-			}
-
-			_vented += vented;
-			if( MathF.Abs( newTotal - own ) > Epsilon
-				|| MathF.Abs( nextTemperature - t ) > Epsilon
-				|| MathF.Abs( flowEast[i] ) > Epsilon
-				|| MathF.Abs( flowSouth[i] ) > Epsilon
-				|| vent[i] > Epsilon
-			) {
-				changing = true;
-			}
-		}
-
+		_transport.Transport( slot, mask, dt, _gas, _gasNext, _total, _flowEast, _flowSouth, _vent, _outgoing, _newTotal );
+		bool changing = _thermal.Mix( slot, mask, dt, conduction, _total, _temperature, _temperatureNext, _flowEast, _flowSouth, _vent, _connectivity, _outgoing, _newTotal, ref _vented );
+		changing |= _condensation.Condense( slot, mask, condensation, _gases, _temperatureNext, _gasNext, _condensate );
 		return changing;
 	}
 
 	private void Publish() {
 		IGridChunkLayout layout = _compiled.ChunkLayout;
-		int stride = _flowEast.Stride;
 		float windScale = _settings.WindScale * 0.5f;
-		Span<float> pressure = _pressure.Cells;
-		Span<float> temperature = _temperature.Cells;
-		Span<float> flowEast = _flowEast.Cells;
-		Span<float> flowSouth = _flowSouth.Cells;
-		Span<float> windX = _windX.Cells;
-		Span<float> windY = _windY.Cells;
 
 		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
+			if( !_publish[slot] || layout.GetState( slot ) == ChunkState.Empty ) {
 				continue;
 			}
 			_flowEast.ExchangeHalo( slot );
 			_flowSouth.ExchangeHalo( slot );
 		}
 		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
+			if( !_publish[slot] || layout.GetState( slot ) == ChunkState.Empty ) {
 				continue;
 			}
 			ReadOnlySpan<ulong> mask = layout.GetValidityMask( slot );
-			for( int local = 0; local < ChunkSize * ChunkSize; local++ ) {
-				if( !IsValid( mask, local ) ) {
-					continue;
-				}
-				int i = ToIndex( slot, local );
-				float total = GetTotal( i );
-				pressure[i] = total * temperature[i] / ReferenceTemperature;
-				if( total <= 0.0f ) {
-					windX[i] = 0.0f;
-					windY[i] = 0.0f;
-					continue;
-				}
-				float vx = ( flowEast[i - 1] + flowEast[i] ) * 0.5f / total;
-				float vy = ( flowSouth[i - stride] + flowSouth[i] ) * 0.5f / total;
-				float speed = MathF.Sqrt( ( vx * vx ) + ( vy * vy ) );
-				float dynamic = windScale * total * speed;
-				windX[i] = dynamic * vx;
-				windY[i] = dynamic * vy;
-			}
+			// Pressure temporarily holds the total gas before being converted.
+			_pressureStage.SumGas( slot, mask, _gas, _pressure );
+			_wind.Publish( slot, mask, windScale, _temperature, _flowEast, _flowSouth, _pressure, _windX, _windY );
 		}
+		Array.Clear( _publish );
+
+		_frames[_frameBack].Capture( _stepCount, _vented, _pressure, _temperature, _windX, _windY, _gas, _condensate );
+		_frameBack = Interlocked.Exchange( ref _frameShared, _frameBack | FrameFresh ) & FrameIndexMask;
 	}
 
 	private IGridLayer<float> GetCondensateLayer(
@@ -815,13 +672,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		layer.MarkDirty( slot );
 		EnsureSlotCapacity();
 		_active[slot] = true;
-	}
-
-	private static bool IsValid(
-		ReadOnlySpan<ulong> mask,
-		int local
-	) {
-		return ( ( mask[local >> 6] >> ( local & 63 ) ) & 1UL ) != 0;
+		_publish[slot] = true;
 	}
 
 }

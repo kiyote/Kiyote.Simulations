@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\Kiyote\Simulations\Kiyote.Simulations\Kiyote.Simulations.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Kiyote\Simulations\LowFidelity\Kiyote.Simulations.LowFidelity\Kiyote.Simulations.LowFidelity.csproj" />
   </ItemGroup>
 
 </Project>

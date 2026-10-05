@@ -38,6 +38,8 @@
     <Project Path="test/Kiyote/Simulations/Kiyote.Simulations.Visualizer/Kiyote.Simulations.Visualizer.csproj" Id="93554633-2fbe-47f7-a531-b5e6710aadad" />
   </Folder>
   <Folder Name="/test/Kiyote/Simulations/LowFidelity/">
+    <Project Path="test/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity.Benchmarks/Kiyote.Simulations.LowFidelity.Benchmarks.csproj" />
     <Project Path="test/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity.IntegrationTests/Kiyote.Simulations.LowFidelity.IntegrationTests.csproj" Id="6dc35fe1-175a-4621-baab-8228a3df4629" />
+    <Project Path="test/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity.Visualizer/Kiyote.Simulations.LowFidelity.Visualizer.csproj" />
   </Folder>
 </Solution>
