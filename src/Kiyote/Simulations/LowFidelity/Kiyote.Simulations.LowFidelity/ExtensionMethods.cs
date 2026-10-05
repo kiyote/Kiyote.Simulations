@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
+using Kiyote.Simulations.LowFidelity.Thermals;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Kiyote.Simulations.LowFidelity;
@@ -11,6 +12,7 @@ public static class ExtensionMethods {
 		this IServiceCollection services
 	) {
 		return services
-			.AddAtmospherics();
+			.AddAtmospherics()
+			.AddThermals();
 	}
 }

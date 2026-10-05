@@ -3,7 +3,10 @@ using Kiyote.Buffers.Numerics;
 using Kiyote.Geometry.Topology;
 using Kiyote.Imaging;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
+using Kiyote.Simulations.LowFidelity.Thermals;
 using Kiyote.Simulations.LowFidelity.Visualizer.Atmospherics;
+using Kiyote.Simulations.LowFidelity.Visualizer.Combined;
+using Kiyote.Simulations.LowFidelity.Visualizer.Thermals;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Kiyote.Simulations.LowFidelity.Visualizer;
@@ -27,13 +30,28 @@ internal sealed class Program {
 			.AddSingleton<IGridCompiler, GridCompiler>()
 			.AddSingleton<IConnectivityBuilder, ConnectivityBuilder>()
 			.AddLowFidelitySimulations()
-			.AddSingleton<AtmosphereVisualizer>();
+			.AddSingleton( ( (IMaterialRegistryBuilder)new MaterialRegistryBuilder( [new MaterialDefinitionSource()] ) ).Build() )
+			.AddSingleton<ThermalsSettings>()
+			.AddSingleton<IThermalsSettings>( sp => sp.GetRequiredService<ThermalsSettings>() )
+			.AddSingleton<AtmosphereVisualizer>()
+			.AddSingleton<ThermalVisualizer>()
+			.AddSingleton<CombinedVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();
 
 		Console.Write( "Atmosphere..." );
 		AtmosphereVisualizer atmosphereVisualizer = services.GetRequiredService<AtmosphereVisualizer>();
 		atmosphereVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
+		Console.Write( "Thermal..." );
+		ThermalVisualizer thermalVisualizer = services.GetRequiredService<ThermalVisualizer>();
+		thermalVisualizer.Execute( outputFolder );
+		Console.WriteLine( "...Done" );
+
+		Console.Write( "Combined..." );
+		CombinedVisualizer combinedVisualizer = services.GetRequiredService<CombinedVisualizer>();
+		combinedVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 	}
 

@@ -1,4 +1,4 @@
-namespace Kiyote.Simulations.LowFidelity.Atmospherics;
+namespace Kiyote.Simulations.LowFidelity;
 
 public interface IGasDefinitionSource {
 
