@@ -20,6 +20,7 @@ public static class Program {
 		BenchmarkSwitcher
 			.FromTypes( [
 				typeof( Atmospherics.AtmosphereBenchmarks ),
+				typeof( Thermals.ThermalBenchmarks ),
 			] )
 			.Run( args, config );
 	}
