@@ -10,7 +10,7 @@ namespace Kiyote.Simulations.LowFidelity.Benchmarks.Thermals;
 public class ThermalBenchmarks {
 
 	private const int Size = 100;
-	private const float FixedTimeStep = 10.0f;
+	private const float FixedTimeStep = 0.1f;
 
 	private static readonly TimeSpan Step = TimeSpan.FromSeconds( FixedTimeStep );
 
@@ -49,7 +49,7 @@ public class ThermalBenchmarks {
 	public void Update() {
 		// Keep a heat source running so the plate never settles.
 		_thermal.AddEnergy( 50, 50, 100000.0f );
-		_ = _thermal.Advance( Step );
+		_ = _thermal.Update( Step );
 	}
 
 	[Benchmark]
@@ -59,7 +59,7 @@ public class ThermalBenchmarks {
 		float angle = _sunStep * MathF.PI / 180.0f;
 		_thermal.SunDirection = new Vector( MathF.Cos( angle ), MathF.Sin( angle ) );
 		_thermal.AddEnergy( 50, 50, 100000.0f );
-		_ = _thermal.Advance( Step );
+		_ = _thermal.Update( Step );
 	}
 
 	[GlobalCleanup]
@@ -86,7 +86,7 @@ public class ThermalBenchmarks {
 
 	private sealed class MaterialDefinitionSource : IMaterialDefinitionSource {
 		IEnumerable<MaterialDefinition> IMaterialDefinitionSource.GetDefinitions() {
-			yield return new MaterialDefinition( "aluminium", "Aluminium", Conductivity: 2.05f, HeatCapacity: 24200.0f, Emissivity: 0.1f, Absorptivity: 0.15f );
+			yield return new MaterialDefinition( "aluminium", "Aluminium", Conductivity: 2.05f, HeatCapacity: 24200.0f, Emissivity: 0.1f, Absorptivity: 0.15f, Convection: 10.0f );
 		}
 	}
 
@@ -94,7 +94,6 @@ public class ThermalBenchmarks {
 		public float StefanBoltzmann => 5.67e-8f;
 		public float SpaceTemperature => 2.7f;
 		public float SolarFlux => 1361.0f;
-		public float FixedTimeStep => ThermalBenchmarks.FixedTimeStep;
-		public int MaxStepsPerAdvance => 1;
+		public int MaxStepsPerUpdate => 1;
 	}
 }

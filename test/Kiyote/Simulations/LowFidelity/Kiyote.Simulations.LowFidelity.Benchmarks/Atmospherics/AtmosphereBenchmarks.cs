@@ -50,7 +50,7 @@ public class AtmosphereBenchmarks {
 		// Keep a source running so chunks never settle and go to sleep,
 		// keeping the work per step comparable to the always-on airflow benchmark.
 		_atmosphere.AddGas( 50, 50, _gas, 1f );
-		_ = _atmosphere.Advance( Step );
+		_ = _atmosphere.Update( Step );
 	}
 
 	[GlobalCleanup]
@@ -85,8 +85,7 @@ public class AtmosphereBenchmarks {
 		public float Conduction => 0.1f;
 		public float HeatCapacity => 20.8f;
 		public float CondensationRate => 0.05f;
-		public float FixedTimeStep => AtmosphereBenchmarks.FixedTimeStep;
-		public int MaxStepsPerAdvance => 1;
+		public int MaxStepsPerUpdate => 1;
 		public float WindScale => 1.0f;
 	}
 }

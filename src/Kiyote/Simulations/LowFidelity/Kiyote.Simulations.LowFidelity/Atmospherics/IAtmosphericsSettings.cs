@@ -17,10 +17,7 @@ public interface IAtmosphericsSettings {
 	// Fraction of gas (or condensate) changing phase per second.
 	float CondensationRate { get; }
 
-	// Seconds per internal step.
-	float FixedTimeStep { get; }
-
-	int MaxStepsPerAdvance { get; }
+	int MaxStepsPerUpdate { get; }
 
 	float WindScale { get; }
 

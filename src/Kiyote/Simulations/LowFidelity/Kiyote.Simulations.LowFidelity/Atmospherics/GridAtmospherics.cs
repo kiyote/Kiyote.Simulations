@@ -6,6 +6,7 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 
 	private readonly IGasRegistry _gases;
 	private readonly IAtmosphericsSettings _settings;
+	private readonly ISimulationClock _clock;
 	private readonly IGridCompiler _compiler;
 	private readonly IConnectivityBuilder _connectivityBuilder;
 	private readonly IAtmospherePressure _pressure;
@@ -19,6 +20,7 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 	public GridAtmospherics(
 		IGasRegistry gases,
 		IAtmosphericsSettings settings,
+		ISimulationClock clock,
 		IGridCompiler compiler,
 		IConnectivityBuilder connectivityBuilder,
 		IAtmospherePressure pressure,
@@ -31,6 +33,7 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 	) {
 		_gases = gases;
 		_settings = settings;
+		_clock = clock;
 		_compiler = compiler;
 		_connectivityBuilder = connectivityBuilder;
 		_pressure = pressure;
@@ -51,6 +54,7 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 			strategy,
 			_gases,
 			_settings,
+			_clock,
 			_compiler,
 			_connectivityBuilder,
 			_pressure,

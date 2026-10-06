@@ -15,7 +15,7 @@ public interface IThermal : IDisposable {
 	Vector SunDirection { get; set; }
 
 	// Returns the number of fixed steps taken.
-	int Advance(
+	int Update(
 		TimeSpan elapsed
 	);
 

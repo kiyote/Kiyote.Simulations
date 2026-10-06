@@ -1,6 +1,6 @@
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 
-// A read-only copy of the atmosphere as of the end of an Advance.
+// A read-only copy of the atmosphere as of the end of an Update.
 // Obtained from IAtmosphere.AcquireFrame and owned exclusively by the reader until ReleaseFrame.
 // Spans are indexed with IndexOf; cells outside the grid return -1.
 public interface IAtmosphereFrame {
@@ -10,7 +10,7 @@ public interface IAtmosphereFrame {
 	// Total fixed steps run when the frame was captured.
 	long StepCount { get; }
 
-	// Total gas lost to space during the Advance that produced the frame.
+	// Total gas lost to space during the Update that produced the frame.
 	float Vented { get; }
 
 	// kPa

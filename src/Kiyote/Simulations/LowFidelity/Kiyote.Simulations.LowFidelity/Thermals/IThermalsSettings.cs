@@ -11,9 +11,6 @@ public interface IThermalsSettings {
 	// Solar power arriving on a face pointing straight at the sun, W.
 	float SolarFlux { get; }
 
-	// Seconds per internal step.
-	float FixedTimeStep { get; }
-
-	int MaxStepsPerAdvance { get; }
+	int MaxStepsPerUpdate { get; }
 
 }

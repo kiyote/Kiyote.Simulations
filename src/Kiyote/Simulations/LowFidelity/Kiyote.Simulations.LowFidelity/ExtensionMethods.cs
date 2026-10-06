@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
 using Kiyote.Simulations.LowFidelity.Thermals;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +13,9 @@ public static class ExtensionMethods {
 		this IServiceCollection services
 	) {
 		return services
+			.AddSingleton<ISimulationClock, SimulationClock>()
 			.AddAtmospherics()
-			.AddThermals();
+			.AddThermals()
+			.AddAtmosphericThermals();
 	}
 }

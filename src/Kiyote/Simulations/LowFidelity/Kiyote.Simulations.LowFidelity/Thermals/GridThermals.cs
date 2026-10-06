@@ -6,6 +6,7 @@ internal sealed class GridThermals : IGridThermals {
 
 	private readonly IMaterialRegistry _materials;
 	private readonly IThermalsSettings _settings;
+	private readonly ISimulationClock _clock;
 	private readonly IGridCompiler _compiler;
 	private readonly IThermalConduction _conduction;
 	private readonly IThermalRadiation _radiation;
@@ -14,6 +15,7 @@ internal sealed class GridThermals : IGridThermals {
 	public GridThermals(
 		IMaterialRegistry materials,
 		IThermalsSettings settings,
+		ISimulationClock clock,
 		IGridCompiler compiler,
 		IThermalConduction conduction,
 		IThermalRadiation radiation,
@@ -21,6 +23,7 @@ internal sealed class GridThermals : IGridThermals {
 	) {
 		_materials = materials;
 		_settings = settings;
+		_clock = clock;
 		_compiler = compiler;
 		_conduction = conduction;
 		_radiation = radiation;
@@ -36,6 +39,7 @@ internal sealed class GridThermals : IGridThermals {
 			strategy,
 			_materials,
 			_settings,
+			_clock,
 			_compiler,
 			_conduction,
 			_radiation,

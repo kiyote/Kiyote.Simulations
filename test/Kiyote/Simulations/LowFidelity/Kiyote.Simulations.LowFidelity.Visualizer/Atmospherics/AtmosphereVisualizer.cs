@@ -58,7 +58,7 @@ internal sealed class AtmosphereVisualizer {
 			foreach( (int column, int row, GasIndex gas) in pumps ) {
 				atmosphere.AddGas( column, row, gas, PumpRate * (float)FrameTime.TotalSeconds );
 			}
-			_ = atmosphere.Advance( FrameTime );
+			_ = atmosphere.Update( FrameTime );
 
 			IGridLayer<float> pressure = atmosphere.Pressure;
 			for( int row = 0; row < AsciiGridSource.Height; row++ ) {

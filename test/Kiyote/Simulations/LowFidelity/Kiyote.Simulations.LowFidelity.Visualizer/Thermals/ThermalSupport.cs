@@ -29,8 +29,7 @@ internal sealed class ThermalsSettings : IThermalsSettings {
 	public float StefanBoltzmann { get; set; } = StefanBoltzmannConstant;
 	public float SpaceTemperature { get; init; } = 2.7f;
 	public float SolarFlux { get; init; } = 1361.0f;
-	public float FixedTimeStep { get; init; } = 10.0f;
-	public int MaxStepsPerAdvance { get; init; } = 2000;
+	public int MaxStepsPerUpdate { get; init; } = 36000;
 }
 
 // Each cell is a 1m x 1m aluminium plate, 1cm thick (27kg):
@@ -39,6 +38,6 @@ internal sealed class ThermalsSettings : IThermalsSettings {
 //   bare metal is a poor emitter and absorber (e ~0.1, a ~0.15).
 internal sealed class MaterialDefinitionSource : IMaterialDefinitionSource {
 	public IEnumerable<MaterialDefinition> GetDefinitions() {
-		yield return new MaterialDefinition( "aluminium", "Aluminium", Conductivity: 2.05f, HeatCapacity: 24200.0f, Emissivity: 0.1f, Absorptivity: 0.15f );
+		yield return new MaterialDefinition( "aluminium", "Aluminium", Conductivity: 2.05f, HeatCapacity: 24200.0f, Emissivity: 0.1f, Absorptivity: 0.15f, Convection: 10.0f );
 	}
 }

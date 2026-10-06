@@ -28,6 +28,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private readonly TStrategy _strategy;
 	private readonly IGasRegistry _gases;
 	private readonly IAtmosphericsSettings _settings;
+	private readonly ISimulationClock _clock;
 	private readonly IGridCompiler _compiler;
 	private readonly IConnectivityBuilder _connectivityBuilder;
 	private readonly IAtmospherePressure _pressureStage;
@@ -81,6 +82,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		TStrategy strategy,
 		IGasRegistry gases,
 		IAtmosphericsSettings settings,
+		ISimulationClock clock,
 		IGridCompiler compiler,
 		IConnectivityBuilder connectivityBuilder,
 		IAtmospherePressure pressureStage,
@@ -95,6 +97,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		_strategy = strategy;
 		_gases = gases;
 		_settings = settings;
+		_clock = clock;
 		_compiler = compiler;
 		_connectivityBuilder = connectivityBuilder;
 		_pressureStage = pressureStage;
@@ -148,7 +151,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		return new Vector( _windX.Cells[index], _windY.Cells[index] );
 	}
 
-	int IAtmosphere.Advance(
+	int IAtmosphere.Update(
 		TimeSpan elapsed
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
@@ -161,11 +164,11 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		EnsureSlotCapacity();
 		ApplyTopologyChanges();
 
-		float dt = _settings.FixedTimeStep;
+		float dt = _clock.FixedTimeStep;
 		_accumulator += (float)elapsed.TotalSeconds;
 		int steps = (int)( _accumulator / dt );
-		if( steps > _settings.MaxStepsPerAdvance ) {
-			steps = _settings.MaxStepsPerAdvance;
+		if( steps > _settings.MaxStepsPerUpdate ) {
+			steps = _settings.MaxStepsPerUpdate;
 			_accumulator = 0.0f;
 		} else {
 			_accumulator -= steps * dt;

@@ -8,7 +8,7 @@ public interface IAtmosphere : IDisposable {
 
 	IGasRegistry Gases { get; }
 
-	// kPa, result of the last Advance.
+	// kPa, result of the last Update.
 	IGridLayer<float> Pressure { get; }
 
 	// K
@@ -20,7 +20,7 @@ public interface IAtmosphere : IDisposable {
 	// kPa of dynamic pressure, +y = south.
 	IGridLayer<float> WindY { get; }
 
-	// Total gas lost to space during the last Advance.
+	// Total gas lost to space during the last Update.
 	float Vented { get; }
 
 	IGridLayer<float> GetGas(
@@ -38,11 +38,11 @@ public interface IAtmosphere : IDisposable {
 	);
 
 	// Returns the number of fixed steps run.
-	int Advance(
+	int Update(
 		TimeSpan elapsed
 	);
 
-	// Safe to call from one reader thread while another thread calls Advance.
+	// Safe to call from one reader thread while another thread calls Update.
 	// Returns the most recently published frame, which the simulation will not touch until
 	// a later AcquireFrame swaps it out.  Only one frame may be held at a time.
 	IAtmosphereFrame AcquireFrame();

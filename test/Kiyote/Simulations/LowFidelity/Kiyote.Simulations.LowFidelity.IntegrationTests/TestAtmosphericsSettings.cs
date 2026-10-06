@@ -14,9 +14,8 @@ internal sealed class TestAtmosphericsSettings : IAtmosphericsSettings {
 
 	public float CondensationRate { get; init; } = 0.05f;
 
-	public float FixedTimeStep { get; init; } = 0.1f;
 
-	public int MaxStepsPerAdvance { get; init; } = 160;
+	public int MaxStepsPerUpdate { get; init; } = 160;
 
 	public float WindScale { get; init; } = 1.0f;
 

@@ -52,7 +52,7 @@ internal sealed class AtmosphereTests {
 			foreach( (int column, int row, GasIndex gas) in pumps ) {
 				_atmosphere.AddGas( column, row, gas, pumpRate * (float)frame.TotalSeconds );
 			}
-			_ = _atmosphere.Advance( frame );
+			_ = _atmosphere.Update( frame );
 		}
 
 		// Sample the interior of the room the pumps sit in (inside the X walls).
@@ -83,7 +83,7 @@ internal sealed class AtmosphereTests {
 		GasIndex nitrogen = _atmosphere.Gases.GetIndex( "N2" );
 		TimeSpan frame = TimeSpan.FromMilliseconds( 100 );
 		_atmosphere.AddGas( 5, 5, nitrogen, 100.0f );
-		_ = _atmosphere.Advance( frame );
+		_ = _atmosphere.Update( frame );
 
 		IAtmosphereFrame held = _atmosphere.AcquireFrame();
 		long step = held.StepCount;
@@ -91,7 +91,7 @@ internal sealed class AtmosphereTests {
 		float[] pressure = held.Pressure.ToArray();
 		for( int i = 0; i < 10; i++ ) {
 			_atmosphere.AddGas( 5, 5, nitrogen, 100.0f );
-			_ = _atmosphere.Advance( frame );
+			_ = _atmosphere.Update( frame );
 		}
 
 		using( Assert.EnterMultipleScope() ) {
@@ -148,7 +148,7 @@ internal sealed class AtmosphereTests {
 		reader.Start();
 		for( int i = 0; i < 500; i++ ) {
 			_atmosphere.AddGas( 5, 5, nitrogen, 10.0f );
-			_ = _atmosphere.Advance( frame );
+			_ = _atmosphere.Update( frame );
 		}
 		done.Cancel();
 		reader.Join();

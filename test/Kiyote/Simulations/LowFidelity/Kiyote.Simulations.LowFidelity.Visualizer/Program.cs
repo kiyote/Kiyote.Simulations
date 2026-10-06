@@ -2,6 +2,7 @@ using Kiyote.Buffers;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Geometry.Topology;
 using Kiyote.Imaging;
+using Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
 using Kiyote.Simulations.LowFidelity.Thermals;
 using Kiyote.Simulations.LowFidelity.Visualizer.Atmospherics;
@@ -35,6 +36,7 @@ internal sealed class Program {
 			.AddSingleton<IThermalsSettings>( sp => sp.GetRequiredService<ThermalsSettings>() )
 			.AddSingleton<AtmosphereVisualizer>()
 			.AddSingleton<ThermalVisualizer>()
+			.AddSingleton<IAtmosphericThermalsSettings, AtmosphericThermalsSettings>()
 			.AddSingleton<CombinedVisualizer>();
 
 		IServiceProvider services = collection.BuildServiceProvider();

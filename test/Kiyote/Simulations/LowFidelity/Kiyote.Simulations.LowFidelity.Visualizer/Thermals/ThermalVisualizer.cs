@@ -71,7 +71,7 @@ internal sealed class ThermalVisualizer {
 		string fileName = _fileSystem.Path.Combine( outputFolder, name );
 		using IAnimationBuilder builder = _animation.StartAnimation( fileName, FrameTime );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
-			_ = thermal.Advance( SimulatedPerFrame );
+			_ = thermal.Update( SimulatedPerFrame );
 
 			IGridLayer<float> temperature = thermal.Temperature;
 			for( int row = 0; row < AsciiGridSource.Height; row++ ) {

@@ -13,6 +13,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 	private readonly TStrategy _strategy;
 	private readonly IMaterialRegistry _materials;
 	private readonly IThermalsSettings _settings;
+	private readonly ISimulationClock _clock;
 	private readonly IGridCompiler _compiler;
 	private readonly IThermalConduction _conduction;
 	private readonly IThermalRadiation _radiation;
@@ -42,6 +43,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		TStrategy strategy,
 		IMaterialRegistry materials,
 		IThermalsSettings settings,
+		ISimulationClock clock,
 		IGridCompiler compiler,
 		IThermalConduction conduction,
 		IThermalRadiation radiation,
@@ -51,6 +53,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_strategy = strategy;
 		_materials = materials;
 		_settings = settings;
+		_clock = clock;
 		_compiler = compiler;
 		_conduction = conduction;
 		_radiation = radiation;
@@ -74,7 +77,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		}
 	}
 
-	int IThermal.Advance(
+	int IThermal.Update(
 		TimeSpan elapsed
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
@@ -92,11 +95,11 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 			_solarStale = false;
 		}
 
-		float dt = _settings.FixedTimeStep;
+		float dt = _clock.FixedTimeStep;
 		_accumulator += (float)elapsed.TotalSeconds;
 		int steps = (int)( _accumulator / dt );
-		if( steps > _settings.MaxStepsPerAdvance ) {
-			steps = _settings.MaxStepsPerAdvance;
+		if( steps > _settings.MaxStepsPerUpdate ) {
+			steps = _settings.MaxStepsPerUpdate;
 			_accumulator = 0.0f;
 		} else {
 			_accumulator -= steps * dt;

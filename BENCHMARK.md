@@ -90,5 +90,5 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # LowFidelity.Thermal
 | Method              | Mean     | Error   | StdDev  | Allocated |
 |-------------------- |---------:|--------:|--------:|----------:|
-| Update              | 196.5 us | 9.01 us | 7.99 us |         - |
-| UpdateWithMovingSun | 223.9 us | 6.82 us | 6.38 us |       1 B |
+| Update              | 196.9 us | 5.28 us | 4.68 us |         - |
+| UpdateWithMovingSun | 248.1 us | 7.68 us | 6.41 us |       1 B |

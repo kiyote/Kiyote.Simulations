@@ -42,7 +42,7 @@ internal sealed class ThermalTests {
 	public void Advance_SunToTheEast_EastFaceHeatsAndWestFaceDoesNot() {
 		_thermal.SunDirection = new Vector( 1.0f, 0.0f );
 
-		_ = _thermal.Advance( TimeSpan.FromSeconds( 1 ) );
+		_ = _thermal.Update( TimeSpan.FromSeconds( 1 ) );
 
 		using( Assert.EnterMultipleScope() ) {
 			Assert.That( _thermal.Temperature[9, 5], Is.GreaterThan( Initial ) );
@@ -54,14 +54,14 @@ internal sealed class ThermalTests {
 	public void Advance_AddEnergy_HeatConductsToNeighbours() {
 		_thermal.AddEnergy( 5, 5, 100000.0f );
 
-		_ = _thermal.Advance( TimeSpan.FromSeconds( 1 ) );
+		_ = _thermal.Update( TimeSpan.FromSeconds( 1 ) );
 
 		Assert.That( _thermal.Temperature[6, 5], Is.GreaterThan( Initial ) );
 	}
 
 	private sealed class TestMaterialSource : IMaterialDefinitionSource {
 		public IEnumerable<MaterialDefinition> GetDefinitions() {
-			return [new MaterialDefinition( "hull", "Hull", Conductivity: 50.0f, HeatCapacity: 1000.0f, Emissivity: 0.8f, Absorptivity: 0.6f )];
+			return [new MaterialDefinition( "hull", "Hull", Conductivity: 50.0f, HeatCapacity: 1000.0f, Emissivity: 0.8f, Absorptivity: 0.6f, Convection: 10.0f )];
 		}
 	}
 
@@ -69,8 +69,7 @@ internal sealed class ThermalTests {
 		public float StefanBoltzmann => 5.67e-8f;
 		public float SpaceTemperature => 2.7f;
 		public float SolarFlux => 1361.0f;
-		public float FixedTimeStep => 0.1f;
-		public int MaxStepsPerAdvance => 100;
+		public int MaxStepsPerUpdate => 100;
 	}
 
 	private readonly struct TestStrategy : IThermalCellStrategy<TestCell> {

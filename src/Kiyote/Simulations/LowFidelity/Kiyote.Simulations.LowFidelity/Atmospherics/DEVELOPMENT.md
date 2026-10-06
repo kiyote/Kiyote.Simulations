@@ -12,7 +12,7 @@ Simulate the atmosphere inside a spaceship well enough to *look and feel* right,
 - Per-cell pressure, composition, temperature, condensate and wind.
 - Flow from high to low pressure through permeable cells, with momentum, so a hull breach reads as *explosive* decompression.
 - Gas reaching space (off-grid / vacuum) is lost and counted in `Vented`.
-- Hooks for external systems between `Advance` calls: `AddGas`, `RemoveGas`, `AddEnergy`, `AddCondensate`, `RemoveCondensate`.
+- Hooks for external systems between `Update` calls: `AddGas`, `RemoveGas`, `AddEnergy`, `AddCondensate`, `RemoveCondensate`.
 
 **Out of scope (owned by callers)**
 
@@ -62,7 +62,7 @@ Diagonals are skipped: they double the cost and pipes already spread isotropical
 - **Heat moves with the gas:** the receiving cell becomes the amount-weighted mix. `AddGas` uses the same mixing with the incoming gas temperature (defaulting to the cell's).
 - `AddEnergy` changes temperature by `joules / ( ΣA · HeatCapacity )`, ignores empty cells, clamps at 2.7 K, and returns the energy actually applied.
 - Optional air-to-air conduction is controlled by `Conduction` (0 = off).
-- External heat exchange should limit each exchange so object and air don't overshoot at high game speeds (one `Advance` can run many steps).
+- External heat exchange should limit each exchange so object and air don't overshoot at high game speeds (one `Update` can run many steps).
 
 ### Phase change
 
@@ -88,12 +88,12 @@ Diagonals are skipped: they double the cost and pipes already spread isotropical
 - Gas, temperature and condensate layers are **bound** to the cells through `TStrategy`. `Commit()` writes dirty chunks back into the cells; call it before saving or before edits that need up-to-date cell values.
 - Flows are not persisted; they rebuild within a few steps.
 - `InvalidateTopology( area )` rebuilds connectivity for an area (door, breach, new tile); `InvalidateTopology()` rebuilds everything. Large areas fall back to a full rebuild.
-- If the compiled grid goes stale (cells added or removed), `Advance` commits, recompiles and rebinds automatically.
-- All caller changes happen **between** `Advance` calls; they are stored and nothing is recalculated until the next `Advance`.
+- If the compiled grid goes stale (cells added or removed), `Update` commits, recompiles and rebinds automatically.
+- All caller changes happen **between** `Update` calls; they are stored and nothing is recalculated until the next `Update`.
 
 ## Time stepping
 
-`Advance( elapsed )` accumulates game time and runs fixed steps of `FixedTimeStep` seconds, returning how many ran. At most `MaxStepsPerAdvance` run per call; any excess time is dropped, so a stalled frame slows the simulation rather than spiralling.
+`Update( elapsed )` accumulates game time and runs fixed steps of `FixedTimeStep` seconds, returning how many ran. At most `MaxStepsPerUpdate` run per call; any excess time is dropped, so a stalled frame slows the simulation rather than spiralling.
 
 ## Implementation notes
 
@@ -101,12 +101,12 @@ Diagonals are skipped: they double the cost and pipes already spread isotropical
 transfer (gas-major, into `_gasNext`/`_temperatureNext`, with temperature mixing, conduction and phase change) → copy back.
 - **Idle chunks are skipped.** A chunk is active when something in it or next to it can change; caller edits and topology changes wake it.
 - **Vectorization:** full rows (all 16 cells valid) are processed 8 cells at a time with `Vector256`; partial rows (next to walls or edges) use a scalar loop over the validity mask. Both paths must produce identical results.
-- **Publish:** pressure and wind are recomputed only for chunks touched since the last publish, once per `Advance`.
+- **Publish:** pressure and wind are recomputed only for chunks touched since the last publish, once per `Update`.
 - **Allocation:** steady-state stepping and publishing allocate nothing.
 
 ## Reading the simulation from a rendering thread
 
-The simulation runs on one thread (the *simulation thread*), which calls `Advance`, `AddGas`, `RemoveGas` and the other mutating methods.
+The simulation runs on one thread (the *simulation thread*), which calls `Update`, `AddGas`, `RemoveGas` and the other mutating methods.
 A second thread (the *render thread*) can safely visualize the simulation at the same time by reading **frames**.
 
 ### The rule
@@ -141,12 +141,12 @@ try {
 
 ### What a frame contains
 
-An `IAtmosphereFrame` is a read-only copy of the simulation as of the end of an `Advance` call:
+An `IAtmosphereFrame` is a read-only copy of the simulation as of the end of an `Update` call:
 
 | Member | Meaning |
 |---|---|
 | `StepCount` | Total fixed steps run when the frame was captured. Use it to detect whether the frame is new. |
-| `Vented` | Gas lost to space during the `Advance` that produced the frame. |
+| `Vented` | Gas lost to space during the `Update` that produced the frame. |
 | `Gases` | The gas registry, for names and indices. |
 | `Pressure`, `Temperature`, `WindX`, `WindY` | Per-cell values. |
 | `GetGas( gas )` | Per-cell amount of a gas. |
@@ -159,7 +159,7 @@ The spans are the raw chunked storage, including halo cells, so they are **not**
 
 The atmosphere keeps three frames in a lock-free triple buffer:
 
-- **back**: owned by the simulation thread. At the end of every `Advance` the simulation copies its layers into this frame, then publishes it with `Interlocked.Exchange` into the shared slot (marked *fresh*) and takes the frame that was there as its new back frame.
+- **back**: owned by the simulation thread. At the end of every `Update` the simulation copies its layers into this frame, then publishes it with `Interlocked.Exchange` into the shared slot (marked *fresh*) and takes the frame that was there as its new back frame.
 - **shared**: the most recently published frame not yet taken by the reader.
 - **front**: owned by the render thread. `AcquireFrame` swaps the front frame for the shared one (with `Interlocked.Exchange`) only when the shared frame is fresh; otherwise it hands back the same front frame again.
 
@@ -169,7 +169,7 @@ Consequences:
 - While the render thread holds a frame, the simulation never writes to it, so the data is stable for as long as it is held.
 - If the simulation advances several times between acquisitions, the reader sees only the latest frame; intermediate frames are skipped.
 - If the simulation has not advanced, `AcquireFrame` returns the same frame (same `StepCount`) as last time.
-- Copies reuse their arrays, so publishing allocates nothing in the steady state. The copy happens once per `Advance`, not once per fixed step.
+- Copies reuse their arrays, so publishing allocates nothing in the steady state. The copy happens once per `Update`, not once per fixed step.
 
 ### Constraints
 
