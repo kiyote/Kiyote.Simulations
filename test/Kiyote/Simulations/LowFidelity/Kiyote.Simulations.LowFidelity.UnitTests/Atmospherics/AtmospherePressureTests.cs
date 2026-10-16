@@ -1,5 +1,3 @@
-using Kiyote.Geometry.Topology;
-
 namespace Kiyote.Simulations.LowFidelity.Atmospherics.UnitTests;
 
 [TestFixture]
@@ -9,21 +7,43 @@ public sealed class AtmospherePressureTests {
 	private const int Y = 3;
 
 	private IAtmospherePressure _pressure;
-	private ChunkLayer<float>[] _gas;
-	private ChunkLayer<float> _temperature;
-	private ChunkLayer<float> _total;
-	private ChunkLayer<float> _output;
+	private ChunkBuffer<float> _oxygen;
+	private ChunkBuffer<float> _nitrogen;
+	private ChunkBuffer<float> _temperature;
+	private ChunkBuffer<float> _total;
+	private ChunkBuffer<float> _output;
 
 	[SetUp]
 	public void SetUp() {
 		_pressure = new AtmospherePressure();
-		_gas = [new ChunkLayer<float>(), new ChunkLayer<float>()];
-		_gas[0].Fill( 20.0f );
-		_gas[1].Fill( 80.0f );
-		_temperature = new ChunkLayer<float>();
+		_oxygen = ChunkBuffer<float>.Chunk();
+		_oxygen.Fill( 20.0f );
+		_nitrogen = ChunkBuffer<float>.Chunk();
+		_nitrogen.Fill( 80.0f );
+		_temperature = ChunkBuffer<float>.Chunk();
 		_temperature.Fill( AtmosphereSimd.ReferenceTemperature * 2.0f );
-		_total = new ChunkLayer<float>();
-		_output = new ChunkLayer<float>();
+		_total = ChunkBuffer<float>.Chunk();
+		_output = ChunkBuffer<float>.Chunk();
+	}
+
+	[TestCase( true )]
+	[TestCase( false )]
+	public void Accumulate_TwoGases_WritesSum(
+		bool full
+	) {
+		ulong[] mask = ChunkMask.Create( full, X, Y );
+
+		_pressure.Accumulate( mask, _oxygen.Span, _total.Span );
+		_pressure.Accumulate( mask, _nitrogen.Span, _total.Span );
+
+		Assert.That( _total[X, Y], Is.EqualTo( 100.0f ).Within( 1e-3f ) );
+	}
+
+	[Test]
+	public void Accumulate_CellOutsideMask_IsUntouched() {
+		_pressure.Accumulate( ChunkMask.Cell( X, Y ), _oxygen.Span, _total.Span );
+
+		Assert.That( _total[X + 1, Y], Is.Zero );
 	}
 
 	[TestCase( true )]
@@ -31,38 +51,20 @@ public sealed class AtmospherePressureTests {
 	public void Compute_TwiceReferenceTemperature_DoublesTotal(
 		bool full
 	) {
-		_pressure.Compute( 0, Mask( full ), _gas, _temperature, _total, _output );
+		_total.Fill( 100.0f );
 
-		using( Assert.EnterMultipleScope() ) {
-			Assert.That( _total[X, Y], Is.EqualTo( 100.0f ).Within( 1e-3f ) );
-			Assert.That( _output[X, Y], Is.EqualTo( 200.0f ).Within( 1e-3f ) );
-		}
+		_pressure.Compute( ChunkMask.Create( full, X, Y ), _total.Span, _temperature.Span, _output.Span );
+
+		Assert.That( _output[X, Y], Is.EqualTo( 200.0f ).Within( 1e-3f ) );
 	}
 
 	[Test]
 	public void Compute_CellOutsideMask_IsUntouched() {
-		_pressure.Compute( 0, ChunkMask.Cell( X, Y ), _gas, _temperature, _total, _output );
+		_total.Fill( 100.0f );
 
-		using( Assert.EnterMultipleScope() ) {
-			Assert.That( _total[X + 1, Y], Is.Zero );
-			Assert.That( _output[X + 1, Y], Is.Zero );
-		}
-	}
+		_pressure.Compute( ChunkMask.Cell( X, Y ), _total.Span, _temperature.Span, _output.Span );
 
-	[TestCase( true )]
-	[TestCase( false )]
-	public void SumGas_TwoGases_WritesSum(
-		bool full
-	) {
-		_pressure.SumGas( 0, Mask( full ), _gas, _total );
-
-		Assert.That( _total[X, Y], Is.EqualTo( 100.0f ).Within( 1e-3f ) );
-	}
-
-	private static ulong[] Mask(
-		bool full
-	) {
-		return full ? ChunkMask.Full() : ChunkMask.Cell( X, Y );
+		Assert.That( _output[X + 1, Y], Is.Zero );
 	}
 
 }

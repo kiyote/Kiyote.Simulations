@@ -13,15 +13,15 @@ internal sealed class AtmosphericThermalsConvectionTests {
 	private IAtmosphericThermalsConvection _convection;
 	private Mock<IAtmosphere> _atmosphere;
 	private Mock<IThermal> _thermal;
-	private ChunkLayer<float> _gasTemperature;
-	private ChunkLayer<float> _structureTemperature;
+	private TestGridLayer<float> _gasTemperature;
+	private TestGridLayer<float> _structureTemperature;
 
 	[SetUp]
 	public void SetUp() {
 		_convection = new AtmosphericThermalsConvection();
-		_gasTemperature = new ChunkLayer<float>();
+		_gasTemperature = new TestGridLayer<float>( TestGridLayout.Create( 2, 1 ) );
 		_gasTemperature.Fill( 300.0f );
-		_structureTemperature = new ChunkLayer<float>();
+		_structureTemperature = new TestGridLayer<float>( _gasTemperature.Layout );
 		_structureTemperature.Fill( 290.0f );
 		_atmosphere = new Mock<IAtmosphere>( MockBehavior.Strict );
 		_atmosphere.Setup( a => a.Temperature ).Returns( _gasTemperature );

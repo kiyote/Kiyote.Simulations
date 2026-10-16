@@ -7,7 +7,7 @@ namespace Kiyote.Simulations.Benchmarks.Topology.Advection;
 public class GridAdvectionBenchmarks {
 
 	private const int Size = 100;
-	private const int ChunkSize = 16;
+	private const int ChunkSize = 32;
 
 	private readonly IGridAdvection _advection;
 	private readonly ICompiledGridAssembly<float> _compiled;
@@ -31,12 +31,12 @@ public class GridAdvectionBenchmarks {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		_compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open(), 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open() );
 		_neighbourhood = _advection.CreateNeighbourhood( _compiled, connectivity );
-		_values = _compiled.Bind<float, Identity>( default, 1 );
-		_scratch = _compiled.CreateLayer<float>( 1 );
-		_velocityX = _compiled.CreateLayer<float>( 0 );
-		_velocityY = _compiled.CreateLayer<float>( 0 );
+		_values = _compiled.Bind<float, Identity>( default );
+		_scratch = _compiled.CreateLayer<float>();
+		_velocityX = _compiled.CreateLayer<float>();
+		_velocityY = _compiled.CreateLayer<float>();
 		for( int row = 0; row < Size; row++ ) {
 			for( int column = 0; column < Size; column++ ) {
 				_velocityX[column, row] = 5f;

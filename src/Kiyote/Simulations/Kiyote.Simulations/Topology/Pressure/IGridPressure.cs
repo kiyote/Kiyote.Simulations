@@ -4,8 +4,8 @@ namespace Kiyote.Simulations.Topology.Pressure;
 
 // Advances a chunked pressure layer by one fixed time step, reading source and writing
 // destination. All layers must come from the same, unchanging compiled assembly; no version
-// checks are performed. Source and destination need a halo of at least 1 and must share a
-// halo so the caller can ICompiledGridAssembly.Swap them afterwards.
+// checks are performed. No halo is needed; the caller can ICompiledGridAssembly.Swap source
+// and destination afterwards.
 //
 // Boundaries follow the Topology model: flagged directions equalise, unflagged directions to
 // existing cells are walls, and directions to missing cells are vacuum (pressure 0), so

@@ -4,8 +4,8 @@ namespace Kiyote.Simulations.Topology.Diffusion;
 
 // Advances a chunked float layer by one step, reading source and writing destination.
 // All layers must come from the same, unchanging compiled assembly; no version checks
-// are performed. Every layer needs a halo of at least 1, and source and destination
-// must share a halo so the caller can ICompiledGridAssembly.Swap them afterwards.
+// are performed. No halo is needed: neighbouring values are read across chunk borders
+// directly, and the caller can ICompiledGridAssembly.Swap source and destination afterwards.
 //
 // For each of a cell's eight directions:
 //   - flagged in connectivity: the neighbour exchanges normally;
@@ -13,8 +13,8 @@ namespace Kiyote.Simulations.Topology.Diffusion;
 //   - unflagged, neighbour unoccupied: vacuum, anything moving that way is discarded.
 // The neighbourhood is connectivity | vacuum, built once per topology by
 // CreateNeighbourhood. Unoccupied cells hold no directions and read as 0, so they stay 0
-// without masking. Update refreshes the source halos and marks every written destination
-// slot dirty.
+// without masking. Missing chunks read as 0. Update marks every written destination chunk
+// dirty.
 public interface IGridDiffusion {
 
 	// Builds the combined passable-or-vacuum layer. The caller owns the returned layer and

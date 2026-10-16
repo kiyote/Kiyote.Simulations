@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.Topology.Projection;
@@ -10,7 +12,9 @@ namespace Kiyote.Simulations.Topology.Projection;
 //   - Wall (unflagged direction to an existing cell): velocity reflects, pressure is zero-gradient.
 //   - Vacuum (missing neighbour cell): zero (Dirichlet) pressure, zero-gradient outflow velocity.
 // Missing and unoccupied cells always hold 0, so vacuum pressure reads as 0 straight from the
-// layer. Every pass is vectorized in blocks of 16 cells, with a scalar tail for small chunks.
+// layer. Layers read at neighbour offsets are gathered per chunk, with a one-cell border from
+// the neighbouring chunks, into padded scratch; missing chunks pad with 0. Every pass is
+// vectorized in blocks of 16 cells, with a scalar tail.
 public sealed class GridProjection : IGridProjection {
 
 	// See the non-vectorized GridProjection for the derivation of this constant.
@@ -19,6 +23,7 @@ public sealed class GridProjection : IGridProjection {
 	private const float Diagonal = 0.7071068f;
 	private const int Block = 16;
 	private const float MinNormal = 1.17549435E-38f;
+	private const int Halo = 1;
 
 	private static readonly Direction[] _directions = [
 		Direction.North,
@@ -47,13 +52,16 @@ public sealed class GridProjection : IGridProjection {
 		ICompiledGridAssembly<TCell> compiled,
 		IGridLayer<Direction> connectivity
 	) {
-		IGridLayer<Direction> vacuum = compiled.CreateVacuumLayer( connectivity.Halo );
-		IGridLayer<Direction> combined = compiled.CreateLayer<Direction>( connectivity.Halo );
-		ReadOnlySpan<Direction> passable = connectivity.Cells;
-		ReadOnlySpan<Direction> missing = vacuum.Cells;
-		Span<Direction> output = combined.Cells;
-		for( int i = 0; i < output.Length; i++ ) {
-			output[i] = passable[i] | missing[i];
+		IGridLayer<Direction> vacuum = compiled.CreateVacuumLayer();
+		IGridLayer<Direction> combined = compiled.CreateLayer<Direction>();
+		ChunkedGridLayout layout = compiled.ChunkLayout;
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			ReadOnlySpan<Direction> passable = connectivity.Values.GetValues( chunk );
+			ReadOnlySpan<Direction> missing = vacuum.Values.GetValues( chunk );
+			Span<Direction> output = combined.Values.GetValues( chunk );
+			for( int i = 0; i < output.Length; i++ ) {
+				output[i] = passable[i] | missing[i];
+			}
 		}
 		compiled.RemoveLayer( vacuum );
 		return new ProjectionNeighbourhood( connectivity, combined );
@@ -69,72 +77,85 @@ public sealed class GridProjection : IGridProjection {
 		IGridLayer<float> pressureScratch,
 		IGridLayer<float> divergence
 	) {
-		ArgumentOutOfRangeException.ThrowIfLessThan( sourceVelocityX.Halo, 1 );
-		ArgumentOutOfRangeException.ThrowIfLessThan( sourceVelocityY.Halo, 1 );
-		ArgumentOutOfRangeException.ThrowIfLessThan( pressure.Halo, 1 );
-		ArgumentOutOfRangeException.ThrowIfNotEqual( pressureScratch.Halo, pressure.Halo );
+		int paddedLength = ChunkPadding.GetPaddedLength( pressure.Layout.ChunkSize, Halo );
+		float[] scratchA = ArrayPool<float>.Shared.Rent( paddedLength );
+		float[] scratchB = ArrayPool<float>.Shared.Rent( paddedLength );
+		try {
+			CalculateDivergence( neighbourhood, sourceVelocityX, sourceVelocityY, divergence, scratchA, scratchB );
 
-		sourceVelocityX.ExchangeHalos();
-		sourceVelocityY.ExchangeHalos();
-		CalculateDivergence( neighbourhood, sourceVelocityX, sourceVelocityY, divergence );
+			IGridLayer<float> relaxationSource = pressure;
+			IGridLayer<float> relaxationDestination = pressureScratch;
+			for( int i = 0; i < _iterations; i++ ) {
+				Relax( neighbourhood.Combined, relaxationSource, relaxationDestination, divergence, scratchA );
+				(relaxationSource, relaxationDestination) = (relaxationDestination, relaxationSource);
+			}
+			if( ( _iterations & 1 ) == 1 ) {
+				relaxationSource.Values.CopyTo( pressure.Values );
+				MarkAll( pressure );
+			}
 
-		IGridLayer<float> relaxationSource = pressure;
-		IGridLayer<float> relaxationDestination = pressureScratch;
-		for( int i = 0; i < _iterations; i++ ) {
-			relaxationSource.ExchangeHalos();
-			Relax( neighbourhood.Combined, relaxationSource, relaxationDestination, divergence );
-			(relaxationSource, relaxationDestination) = (relaxationDestination, relaxationSource);
+			SubtractGradient( neighbourhood.Combined, pressure, sourceVelocityX, sourceVelocityY, destinationVelocityX, destinationVelocityY, scratchA );
+		} finally {
+			ArrayPool<float>.Shared.Return( scratchB );
+			ArrayPool<float>.Shared.Return( scratchA );
 		}
-		if( ( _iterations & 1 ) == 1 ) {
-			relaxationSource.Cells.CopyTo( pressure.Cells );
-			MarkAll( pressure );
-		}
-
-		pressure.ExchangeHalos();
-		SubtractGradient( neighbourhood.Combined, pressure, sourceVelocityX, sourceVelocityY, destinationVelocityX, destinationVelocityY );
 	}
 
 	private static void CalculateDivergence(
 		ProjectionNeighbourhood neighbourhood,
 		IGridLayer<float> sourceX,
 		IGridLayer<float> sourceY,
-		IGridLayer<float> divergence
+		IGridLayer<float> divergence,
+		float[] scratchX,
+		float[] scratchY
 	) {
-		IGridLayer<Direction> passableLayer = neighbourhood.Passable;
-		IGridLayer<Direction> combinedLayer = neighbourhood.Combined;
-		IGridChunkLayout layout = sourceX.Space;
+		ChunkedGridLayer<Direction> passableValues = neighbourhood.Passable.Values;
+		ChunkedGridLayer<Direction> combinedValues = neighbourhood.Combined.Values;
+		ChunkedGridLayer<float> sourceXValues = sourceX.Values;
+		ChunkedGridLayer<float> sourceYValues = sourceY.Values;
+		ChunkedGridLayer<float> divergenceValues = divergence.Values;
+		ChunkedGridLayout layout = sourceX.Layout;
 		int size = layout.ChunkSize;
-		Span<int> offsetsX = stackalloc int[DirectionCount];
-		Span<int> offsetsY = stackalloc int[DirectionCount];
-		Offsets( sourceX.Stride, offsetsX );
-		Offsets( sourceY.Stride, offsetsY );
+		int stride = size + ( 2 * Halo );
+		Span<int> offsets = stackalloc int[DirectionCount];
+		Offsets( stride, offsets );
 		float scale = PoissonScale / DirectionCount;
 		Vector256<float> minusTwo = Vector256.Create( -2f );
 
-		ReadOnlySpan<Direction> passable = passableLayer.Cells;
-		ReadOnlySpan<Direction> combined = combinedLayer.Cells;
-		ReadOnlySpan<float> vx = sourceX.Cells;
-		ReadOnlySpan<float> vy = sourceY.Cells;
-		Span<float> rhs = divergence.Cells;
-		ref byte passableRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( passable ) );
-		ref byte combinedRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( combined ) );
-		ref float vxRef = ref MemoryMarshal.GetReference( vx );
-		ref float vyRef = ref MemoryMarshal.GetReference( vy );
-		ref float rhsRef = ref MemoryMarshal.GetReference( rhs );
-
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			if( layout.GetFill( chunk ) == ChunkFill.Empty ) {
 				continue;
 			}
+			TopologyChunk.GatherPadded( sourceXValues, chunk, scratchX );
+			TopologyChunk.GatherPadded( sourceYValues, chunk, scratchY );
+			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+			int words = layout.PresenceWordsPerRow;
+			ReadOnlySpan<Direction> passable = passableValues.GetValues( chunk );
+			ReadOnlySpan<Direction> combined = combinedValues.GetValues( chunk );
+			ReadOnlySpan<float> vx = scratchX;
+			ReadOnlySpan<float> vy = scratchY;
+			Span<float> rhs = divergenceValues.GetValues( chunk );
+			ref byte passableRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( passable ) );
+			ref byte combinedRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( combined ) );
+			ref float vxRef = ref MemoryMarshal.GetReference( vx );
+			ref float vyRef = ref MemoryMarshal.GetReference( vy );
+			ref float rhsRef = ref MemoryMarshal.GetReference( rhs );
+
 			for( int row = 0; row < size; row++ ) {
-				int passableStart = passableLayer.IndexOf( slot, 0, row );
-				int combinedStart = combinedLayer.IndexOf( slot, 0, row );
-				int xStart = sourceX.IndexOf( slot, 0, row );
-				int yStart = sourceY.IndexOf( slot, 0, row );
-				int rhsStart = divergence.IndexOf( slot, 0, row );
+				if( !TopologyChunk.AnyInRow( presence, words, row ) ) {
+					continue;
+				}
+				int passableStart = row * size;
+				int combinedStart = row * size;
+				int xStart = ( ( row + Halo ) * stride ) + Halo;
+				int yStart = xStart;
+				int rhsStart = row * size;
 
 				int column = 0;
 				for( ; column + Block <= size; column += Block ) {
+					if( TopologyChunk.Bits( presence, words, row, column, Block ) == 0 ) {
+						continue;
+					}
 					(Vector256<int> passable0, Vector256<int> passable1) = LoadFlags( ref passableRef, passableStart + column );
 					(Vector256<int> combined0, Vector256<int> combined1) = LoadFlags( ref combinedRef, combinedStart + column );
 					int ix = xStart + column;
@@ -155,8 +176,8 @@ public sealed class GridProjection : IGridProjection {
 						Vector256<float> open1 = ( ~Vector256.Equals( passable1 & bit, Vector256<int>.Zero ) ).AsSingle();
 						Vector256<float> wall0 = Vector256.Equals( combined0 & bit, Vector256<int>.Zero ).AsSingle();
 						Vector256<float> wall1 = Vector256.Equals( combined1 & bit, Vector256<int>.Zero ).AsSingle();
-						int nx = ix + offsetsX[d];
-						int ny = iy + offsetsY[d];
+						int nx = ix + offsets[d];
+						int ny = iy + offsets[d];
 						Vector256<float> neighbour0 = ( Vector256.LoadUnsafe( ref vxRef, (nuint)nx ) * ux ) + ( Vector256.LoadUnsafe( ref vyRef, (nuint)ny ) * uy );
 						Vector256<float> neighbour1 = ( Vector256.LoadUnsafe( ref vxRef, (nuint)( nx + 8 ) ) * ux ) + ( Vector256.LoadUnsafe( ref vyRef, (nuint)( ny + 8 ) ) * uy );
 						// Wall: reflected neighbour velocity, (reflected - self) . u = -2 (self . u). Vacuum contributes nothing.
@@ -177,7 +198,7 @@ public sealed class GridProjection : IGridProjection {
 					for( int d = 0; d < DirectionCount; d++ ) {
 						float self = ( x * _unitX[d] ) + ( y * _unitY[d] );
 						if( ( open & _directions[d] ) != 0 ) {
-							sum += ( vx[ix + offsetsX[d]] * _unitX[d] ) + ( vy[iy + offsetsY[d]] * _unitY[d] ) - self;
+							sum += ( vx[ix + offsets[d]] * _unitX[d] ) + ( vy[iy + offsets[d]] * _unitY[d] ) - self;
 						} else if( ( any & _directions[d] ) == 0 ) {
 							sum -= 2f * self;
 						}
@@ -185,7 +206,7 @@ public sealed class GridProjection : IGridProjection {
 					rhs[rhsStart + column] = sum * scale;
 				}
 			}
-			divergence.MarkDirty( slot );
+			divergence.MarkDirty( chunk );
 		}
 	}
 
@@ -193,35 +214,50 @@ public sealed class GridProjection : IGridProjection {
 		IGridLayer<Direction> neighbourhood,
 		IGridLayer<float> source,
 		IGridLayer<float> destination,
-		IGridLayer<float> divergence
+		IGridLayer<float> divergence,
+		float[] scratch
 	) {
-		IGridChunkLayout layout = source.Space;
+		ChunkedGridLayer<Direction> flagValues = neighbourhood.Values;
+		ChunkedGridLayer<float> sourceValues = source.Values;
+		ChunkedGridLayer<float> divergenceValues = divergence.Values;
+		ChunkedGridLayer<float> destinationValues = destination.Values;
+		ChunkedGridLayout layout = source.Layout;
 		int size = layout.ChunkSize;
+		int stride = size + ( 2 * Halo );
 		Span<int> offsets = stackalloc int[DirectionCount];
-		Offsets( source.Stride, offsets );
+		Offsets( stride, offsets );
 		Vector256<float> minNormal = Vector256.Create( MinNormal );
 
-		ReadOnlySpan<Direction> flags = neighbourhood.Cells;
-		ReadOnlySpan<float> input = source.Cells;
-		ReadOnlySpan<float> rhs = divergence.Cells;
-		Span<float> output = destination.Cells;
-		ref byte flagsRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( flags ) );
-		ref float inputRef = ref MemoryMarshal.GetReference( input );
-		ref float rhsRef = ref MemoryMarshal.GetReference( rhs );
-		ref float outputRef = ref MemoryMarshal.GetReference( output );
-
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			if( layout.GetFill( chunk ) == ChunkFill.Empty ) {
 				continue;
 			}
+			TopologyChunk.GatherPadded( sourceValues, chunk, scratch );
+			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+			int words = layout.PresenceWordsPerRow;
+			ReadOnlySpan<Direction> flags = flagValues.GetValues( chunk );
+			ReadOnlySpan<float> input = scratch;
+			ReadOnlySpan<float> rhs = divergenceValues.GetValues( chunk );
+			Span<float> output = destinationValues.GetValues( chunk );
+			ref byte flagsRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( flags ) );
+			ref float inputRef = ref MemoryMarshal.GetReference( input );
+			ref float rhsRef = ref MemoryMarshal.GetReference( rhs );
+			ref float outputRef = ref MemoryMarshal.GetReference( output );
+
 			for( int row = 0; row < size; row++ ) {
-				int flagStart = neighbourhood.IndexOf( slot, 0, row );
-				int inputStart = source.IndexOf( slot, 0, row );
-				int rhsStart = divergence.IndexOf( slot, 0, row );
-				int outputStart = destination.IndexOf( slot, 0, row );
+				if( !TopologyChunk.AnyInRow( presence, words, row ) ) {
+					continue;
+				}
+				int flagStart = row * size;
+				int inputStart = ( ( row + Halo ) * stride ) + Halo;
+				int rhsStart = row * size;
+				int outputStart = row * size;
 
 				int column = 0;
 				for( ; column + Block <= size; column += Block ) {
+					if( TopologyChunk.Bits( presence, words, row, column, Block ) == 0 ) {
+						continue;
+					}
 					(Vector256<int> include0, Vector256<int> include1) = LoadFlags( ref flagsRef, flagStart + column );
 					int i = inputStart + column;
 					Vector256<float> sum0 = Vector256<float>.Zero;
@@ -265,7 +301,7 @@ public sealed class GridProjection : IGridProjection {
 					output[outputStart + column] = MathF.Abs( result ) >= MinNormal ? result : 0f;
 				}
 			}
-			destination.MarkDirty( slot );
+			destination.MarkDirty( chunk );
 		}
 	}
 
@@ -275,41 +311,58 @@ public sealed class GridProjection : IGridProjection {
 		IGridLayer<float> sourceX,
 		IGridLayer<float> sourceY,
 		IGridLayer<float> destinationX,
-		IGridLayer<float> destinationY
+		IGridLayer<float> destinationY,
+		float[] scratch
 	) {
-		IGridChunkLayout layout = pressure.Space;
+		ChunkedGridLayer<Direction> flagValues = neighbourhood.Values;
+		ChunkedGridLayer<float> pressureValues = pressure.Values;
+		ChunkedGridLayer<float> sourceXValues = sourceX.Values;
+		ChunkedGridLayer<float> sourceYValues = sourceY.Values;
+		ChunkedGridLayer<float> destinationXValues = destinationX.Values;
+		ChunkedGridLayer<float> destinationYValues = destinationY.Values;
+		ChunkedGridLayout layout = pressure.Layout;
 		int size = layout.ChunkSize;
+		int stride = size + ( 2 * Halo );
 		Span<int> offsets = stackalloc int[DirectionCount];
-		Offsets( pressure.Stride, offsets );
+		Offsets( stride, offsets );
 		Vector256<float> inverseCount = Vector256.Create( 1f / DirectionCount );
 
-		ReadOnlySpan<Direction> flags = neighbourhood.Cells;
-		ReadOnlySpan<float> p = pressure.Cells;
-		ReadOnlySpan<float> vx = sourceX.Cells;
-		ReadOnlySpan<float> vy = sourceY.Cells;
-		Span<float> outX = destinationX.Cells;
-		Span<float> outY = destinationY.Cells;
-		ref byte flagsRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( flags ) );
-		ref float pRef = ref MemoryMarshal.GetReference( p );
-		ref float vxRef = ref MemoryMarshal.GetReference( vx );
-		ref float vyRef = ref MemoryMarshal.GetReference( vy );
-		ref float outXRef = ref MemoryMarshal.GetReference( outX );
-		ref float outYRef = ref MemoryMarshal.GetReference( outY );
-
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			if( layout.GetFill( chunk ) == ChunkFill.Empty ) {
 				continue;
 			}
+			TopologyChunk.GatherPadded( pressureValues, chunk, scratch );
+			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+			int words = layout.PresenceWordsPerRow;
+			ReadOnlySpan<Direction> flags = flagValues.GetValues( chunk );
+			ReadOnlySpan<float> p = scratch;
+			ReadOnlySpan<float> vx = sourceXValues.GetValues( chunk );
+			ReadOnlySpan<float> vy = sourceYValues.GetValues( chunk );
+			Span<float> outX = destinationXValues.GetValues( chunk );
+			Span<float> outY = destinationYValues.GetValues( chunk );
+			ref byte flagsRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( flags ) );
+			ref float pRef = ref MemoryMarshal.GetReference( p );
+			ref float vxRef = ref MemoryMarshal.GetReference( vx );
+			ref float vyRef = ref MemoryMarshal.GetReference( vy );
+			ref float outXRef = ref MemoryMarshal.GetReference( outX );
+			ref float outYRef = ref MemoryMarshal.GetReference( outY );
+
 			for( int row = 0; row < size; row++ ) {
-				int flagStart = neighbourhood.IndexOf( slot, 0, row );
-				int pStart = pressure.IndexOf( slot, 0, row );
-				int xStart = sourceX.IndexOf( slot, 0, row );
-				int yStart = sourceY.IndexOf( slot, 0, row );
-				int outXStart = destinationX.IndexOf( slot, 0, row );
-				int outYStart = destinationY.IndexOf( slot, 0, row );
+				if( !TopologyChunk.AnyInRow( presence, words, row ) ) {
+					continue;
+				}
+				int flagStart = row * size;
+				int pStart = ( ( row + Halo ) * stride ) + Halo;
+				int xStart = row * size;
+				int yStart = row * size;
+				int outXStart = row * size;
+				int outYStart = row * size;
 
 				int column = 0;
 				for( ; column + Block <= size; column += Block ) {
+					if( TopologyChunk.Bits( presence, words, row, column, Block ) == 0 ) {
+						continue;
+					}
 					(Vector256<int> include0, Vector256<int> include1) = LoadFlags( ref flagsRef, flagStart + column );
 					int i = pStart + column;
 					Vector256<float> self0 = Vector256.LoadUnsafe( ref pRef, (nuint)i );
@@ -357,8 +410,8 @@ public sealed class GridProjection : IGridProjection {
 					outY[outYStart + column] = vy[yStart + column] - ( gy / DirectionCount );
 				}
 			}
-			destinationX.MarkDirty( slot );
-			destinationY.MarkDirty( slot );
+			destinationX.MarkDirty( chunk );
+			destinationY.MarkDirty( chunk );
 		}
 	}
 
@@ -374,10 +427,10 @@ public sealed class GridProjection : IGridProjection {
 	private static void MarkAll(
 		IGridLayer<float> layer
 	) {
-		IGridChunkLayout layout = layer.Space;
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) != ChunkState.Empty ) {
-				layer.MarkDirty( slot );
+		ChunkedGridLayout layout = layer.Layout;
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			if( layout.GetFill( chunk ) != ChunkFill.Empty ) {
+				layer.MarkDirty( chunk );
 			}
 		}
 	}

@@ -9,7 +9,7 @@ namespace Kiyote.Simulations.Visualizer.Topology.Projection;
 internal sealed class GridProjectionVisualizer {
 
 	public const int Size = 100;
-	public const int ChunkSize = 16;
+	public const int ChunkSize = 32;
 	public const int TotalFrameCount = 100;
 	public const int StepsPerFrame = 4;
 
@@ -63,15 +63,15 @@ internal sealed class GridProjectionVisualizer {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		using ICompiledGridAssembly<float> compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy, 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy );
 		ProjectionNeighbourhood neighbourhood = _projection.CreateNeighbourhood( compiled, connectivity );
-		IGridLayer<float> inputX = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> inputY = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> outputX = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> outputY = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> pressure = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> pressureScratch = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> divergence = compiled.CreateLayer<float>( 0 );
+		IGridLayer<float> inputX = compiled.CreateLayer<float>();
+		IGridLayer<float> inputY = compiled.CreateLayer<float>();
+		IGridLayer<float> outputX = compiled.CreateLayer<float>();
+		IGridLayer<float> outputY = compiled.CreateLayer<float>();
+		IGridLayer<float> pressure = compiled.CreateLayer<float>();
+		IGridLayer<float> pressureScratch = compiled.CreateLayer<float>();
+		IGridLayer<float> divergence = compiled.CreateLayer<float>();
 
 		inputX[95, 5] = -10f;
 		inputY[95, 5] = -10f;

@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Kiyote.Simulations.Manager;
 
-internal class SimulationManager : ISimulationManager {
+internal sealed class SimulationManager : ISimulationManager {
 
 	private readonly float _timeStep;
 	private readonly double _maximumScaledDeltaTime;

@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.Topology.Advection;
@@ -8,10 +10,15 @@ namespace Kiyote.Simulations.Topology.Advection;
 // Backtraces are data-dependent gathers, so the general walk and sample are scalar per cell.
 // Blocks of 8 cells whose displacements are all within [-1, 1) take a vectorized fast path:
 // the backtrace can then only land in the cell itself or its W/N/NW neighbour, so every read
-// is a contiguous load at a fixed offset and the walk becomes per-lane selects.
+// is a contiguous load at a fixed offset and the walk becomes per-lane selects. The source
+// values and both flag layers are gathered per chunk, with a one-cell border from the
+// neighbouring chunks, into padded scratch so blocks at chunk edges stay vectorized. The
+// scalar walk can cross any number of chunks, stepping through the chunk neighbours.
 public sealed class GridAdvection : IGridAdvection {
 
 	private const int Lanes = 8;
+	private const int Halo = 1;
+	private const int NoChunk = -1;
 
 	private readonly float _timeStep;
 
@@ -25,24 +32,7 @@ public sealed class GridAdvection : IGridAdvection {
 		ICompiledGridAssembly<TCell> compiled,
 		IGridLayer<Direction> connectivity
 	) {
-		// The fast path reads W/N/NW flags across chunk edges, so both flag layers need a halo.
-		const int halo = 1;
-		IGridLayer<Direction> passable = connectivity;
-		if( connectivity.Halo < halo ) {
-			passable = compiled.CreateLayer<Direction>( halo );
-			IGridChunkLayout layout = connectivity.Space;
-			int size = layout.ChunkSize;
-			ReadOnlySpan<Direction> from = connectivity.Cells;
-			Span<Direction> to = passable.Cells;
-			for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-				for( int row = 0; row < size; row++ ) {
-					from.Slice( connectivity.IndexOf( slot, 0, row ), size )
-						.CopyTo( to.Slice( passable.IndexOf( slot, 0, row ), size ) );
-				}
-			}
-			passable.ExchangeHalos();
-		}
-		return new AdvectionNeighbourhood( passable, compiled.CreateVacuumLayer( passable.Halo ) );
+		return new AdvectionNeighbourhood( connectivity, compiled.CreateVacuumLayer() );
 	}
 
 	void IGridAdvection.Update(
@@ -52,66 +42,96 @@ public sealed class GridAdvection : IGridAdvection {
 		IGridLayer<float> source,
 		IGridLayer<float> destination
 	) {
-		ArgumentOutOfRangeException.ThrowIfLessThan( source.Halo, 1 );
-
-		source.ExchangeHalos();
-
-		IGridLayer<Direction> passableLayer = neighbourhood.Passable;
-		IGridLayer<Direction> vacuumLayer = neighbourhood.Vacuum;
-		IGridChunkLayout layout = source.Space;
+		ChunkedGridLayer<Direction> passableValues = neighbourhood.Passable.Values;
+		ChunkedGridLayer<Direction> vacuumValues = neighbourhood.Vacuum.Values;
+		ChunkedGridLayer<float> sourceValues = source.Values;
+		ChunkedGridLayer<float> velocityXValues = velocityX.Values;
+		ChunkedGridLayer<float> velocityYValues = velocityY.Values;
+		ChunkedGridLayer<float> destinationValues = destination.Values;
+		ChunkedGridLayout layout = source.Layout;
 		int size = layout.ChunkSize;
+		int stride = size + ( 2 * Halo );
 		float timeStep = _timeStep;
-
-		ReadOnlySpan<Direction> passable = passableLayer.Cells;
-		ReadOnlySpan<Direction> vacuum = vacuumLayer.Cells;
-		ReadOnlySpan<float> vx = velocityX.Cells;
-		ReadOnlySpan<float> vy = velocityY.Cells;
-		ReadOnlySpan<float> input = source.Cells;
-		Span<float> output = destination.Cells;
-		LayerIndexer flags = new LayerIndexer( passableLayer );
-		LayerIndexer values = new LayerIndexer( source );
-		int stride = source.Stride;
-		int flagStride = passableLayer.Stride;
-		// With flag halos, the W/N/NW neighbour flags at a chunk edge come from the neighbouring
-		// chunk (the source halo is always exchanged), so edge blocks can stay vectorized.
-		bool crossEdges = passableLayer.Halo >= 1 && vacuumLayer.Halo >= 1;
 		bool vectorize = Vector256.IsHardwareAccelerated;
-		ref float vxRef = ref MemoryMarshal.GetReference( vx );
-		ref float vyRef = ref MemoryMarshal.GetReference( vy );
-		ref float inputRef = ref MemoryMarshal.GetReference( input );
-		ref float outputRef = ref MemoryMarshal.GetReference( output );
-		ref byte passableRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( passable ) );
-		ref byte vacuumRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( vacuum ) );
 
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
-				continue;
-			}
-			for( int row = 0; row < size; row++ ) {
-				int xStart = velocityX.IndexOf( slot, 0, row );
-				int yStart = velocityY.IndexOf( slot, 0, row );
-				int inputStart = source.IndexOf( slot, 0, row );
-				int outputStart = destination.IndexOf( slot, 0, row );
-				int flagStart = flags.Index( slot, 0, row );
-				int column = 0;
-				if( vectorize ) {
-					for( ; column + Lanes <= size; column += Lanes ) {
-						if( !TryAdvectBlock(
-							ref vxRef, ref vyRef, ref inputRef, ref outputRef, ref passableRef, ref vacuumRef,
-							xStart + column, yStart + column, inputStart + column, outputStart + column, flagStart + column,
-							stride, flagStride, !crossEdges && column == 0, !crossEdges && row == 0, timeStep
-						) ) {
-							for( int lane = column; lane < column + Lanes; lane++ ) {
-								output[outputStart + lane] = AdvectCell( layout, size, passable, vacuum, vx, vy, input, flags, values, stride, timeStep, slot, lane, row, xStart, yStart, inputStart );
+		int paddedLength = ChunkPadding.GetPaddedLength( size, Halo );
+		float[] inputScratch = ArrayPool<float>.Shared.Rent( paddedLength );
+		Direction[] passableScratch = ArrayPool<Direction>.Shared.Rent( paddedLength );
+		Direction[] vacuumScratch = ArrayPool<Direction>.Shared.Rent( paddedLength );
+		try {
+			foreach( int chunk in layout.EnumerateChunks() ) {
+				if( layout.GetFill( chunk ) == ChunkFill.Empty ) {
+					continue;
+				}
+				TopologyChunk.GatherPadded( sourceValues, chunk, inputScratch );
+				TopologyChunk.GatherPadded( passableValues, chunk, passableScratch );
+				TopologyChunk.GatherPadded( vacuumValues, chunk, vacuumScratch );
+				ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+				int words = layout.PresenceWordsPerRow;
+
+				ReadOnlySpan<float> vx = velocityXValues.GetValues( chunk );
+				ReadOnlySpan<float> vy = velocityYValues.GetValues( chunk );
+				Span<float> output = destinationValues.GetValues( chunk );
+				ref float vxRef = ref MemoryMarshal.GetReference( vx );
+				ref float vyRef = ref MemoryMarshal.GetReference( vy );
+				ref float inputRef = ref MemoryMarshal.GetArrayDataReference( inputScratch );
+				ref float outputRef = ref MemoryMarshal.GetReference( output );
+				ref byte passableRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetArrayDataReference( passableScratch ) );
+				ref byte vacuumRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetArrayDataReference( vacuumScratch ) );
+				Walker walker = new Walker(
+					layout,
+					passableValues,
+					vacuumValues,
+					sourceValues,
+					chunk,
+					inputScratch,
+					passableValues.GetValues( chunk ),
+					vacuumValues.GetValues( chunk ),
+					size,
+					stride,
+					timeStep
+				);
+
+				for( int row = 0; row < size; row++ ) {
+					int xStart = row * size;
+					int yStart = row * size;
+					int outputStart = row * size;
+					// The padded source and flag scratch share a stride, so one start serves both.
+					int paddedStart = ( ( row + Halo ) * stride ) + Halo;
+					// Unoccupied cells have no velocity and hold 0, so they always advect to 0; skip them.
+					if( !TopologyChunk.AnyInRow( presence, words, row ) ) {
+						continue;
+					}
+					int column = 0;
+					if( vectorize ) {
+						for( ; column + Lanes <= size; column += Lanes ) {
+							if( TopologyChunk.Bits( presence, words, row, column, Lanes ) == 0 ) {
+								continue;
+							}
+							if( !TryAdvectBlock(
+								ref vxRef, ref vyRef, ref inputRef, ref outputRef, ref passableRef, ref vacuumRef,
+								xStart + column, yStart + column, paddedStart + column, outputStart + column, paddedStart + column,
+								stride, stride, timeStep
+							) ) {
+								for( int lane = column; lane < column + Lanes; lane++ ) {
+									output[outputStart + lane] = walker.AdvectCell( vx[xStart + lane], vy[yStart + lane], lane, row );
+								}
 							}
 						}
 					}
+					for( ; column < size; column++ ) {
+						if( TopologyChunk.Bits( presence, words, row, column, 1 ) == 0 ) {
+							continue;
+						}
+						output[outputStart + column] = walker.AdvectCell( vx[xStart + column], vy[yStart + column], column, row );
+					}
 				}
-				for( ; column < size; column++ ) {
-					output[outputStart + column] = AdvectCell( layout, size, passable, vacuum, vx, vy, input, flags, values, stride, timeStep, slot, column, row, xStart, yStart, inputStart );
-				}
+				destination.MarkDirty( chunk );
 			}
-			destination.MarkDirty( slot );
+		} finally {
+			ArrayPool<Direction>.Shared.Return( vacuumScratch );
+			ArrayPool<Direction>.Shared.Return( passableScratch );
+			ArrayPool<float>.Shared.Return( inputScratch );
 		}
 	}
 
@@ -131,8 +151,6 @@ public sealed class GridAdvection : IGridAdvection {
 		int f,
 		int s,
 		int fs,
-		bool firstColumn,
-		bool firstRow,
 		float timeStep
 	) {
 		Vector256<float> dt = Vector256.Create( -timeStep );
@@ -150,12 +168,6 @@ public sealed class GridAdvection : IGridAdvection {
 		Vector256<float> zero = Vector256<float>.Zero;
 		Vector256<int> wx = Vector256.LessThan( dx, zero ).AsInt32();
 		Vector256<int> wy = Vector256.LessThan( dy, zero ).AsInt32();
-		if( ( firstColumn && wx.GetElement( 0 ) != 0 ) || ( firstRow && wy != Vector256<int>.Zero ) ) {
-			return false;
-		}
-		if( f - fs - 1 < 0 ) {
-			return false;
-		}
 
 		Vector256<int> p0 = LoadFlags( ref passableRef, f );
 		Vector256<int> pW = LoadFlags( ref passableRef, f - 1 );
@@ -271,154 +283,222 @@ public sealed class GridAdvection : IGridAdvection {
 		return Vector256.Create( Vector128.WidenLower( widened ), Vector128.WidenUpper( widened ) ).AsInt32();
 	}
 
-	private static float AdvectCell(
-		IGridChunkLayout layout,
-		int size,
-		ReadOnlySpan<Direction> passable,
-		ReadOnlySpan<Direction> vacuum,
-		ReadOnlySpan<float> vx,
-		ReadOnlySpan<float> vy,
-		ReadOnlySpan<float> input,
-		LayerIndexer flags,
-		LayerIndexer values,
-		int stride,
-		float timeStep,
-		int slot,
-		int column,
-		int row,
-		int xStart,
-		int yStart,
-		int inputStart
-	) {
-					float self = input[inputStart + column];
-					float dx = -vx[xStart + column] * timeStep;
-					float dy = -vy[yStart + column] * timeStep;
-					if( ( dx == 0f && dy == 0f ) || !float.IsFinite( dx ) || !float.IsFinite( dy ) ) {
-						return self;
-					}
+	// The general scalar walk and bilinear sample for one cell of the chunk being updated.
+	// Reads within that chunk come from its padded scratch; once the walk leaves it, flags and
+	// values are read from whichever chunk the walker or sample lands in, with missing chunks
+	// reading as 0.
+	private readonly ref struct Walker {
 
-					// Walk to the cell containing the backtraced position, so displacements of
-					// more than one cell are interpolated rather than truncated.
-					float floorX = MathF.Floor( dx );
-					float floorY = MathF.Floor( dy );
-					float fx = dx - floorX;
-					float fy = dy - floorY;
-					int remainingX = Math.Abs( (int)floorX );
-					int remainingY = Math.Abs( (int)floorY );
-					Direction horizontal = floorX < 0f ? Direction.West : Direction.East;
-					Direction vertical = floorY < 0f ? Direction.North : Direction.South;
-					int s = slot;
-					int c = column;
-					int r = row;
-					bool inVacuum = false;
-					while( remainingX > 0 || remainingY > 0 ) {
-						bool moveX = remainingX >= remainingY;
-						Direction step = moveX ? horizontal : vertical;
-						int f = flags.Index( s, c, r );
-						if( ( passable[f] & step ) != 0 ) {
-							Step( layout, size, step, ref s, ref c, ref r );
-							if( moveX ) {
-								remainingX--;
-							} else {
-								remainingY--;
-							}
-						} else if( ( vacuum[f] & step ) != 0 ) {
-							inVacuum = true;
-							break;
-						} else if( moveX ) {
-							remainingX = 0;
-							fx = 0f;
-						} else {
-							remainingY = 0;
-							fy = 0f;
-						}
-					}
-					if( inVacuum ) {
-						return 0f;
-					}
-
-					int flagIndex = flags.Index( s, c, r );
-					Direction open = passable[flagIndex];
-					Direction missing = vacuum[flagIndex];
-					int i = values.Index( s, c, r );
-					float origin = input[i];
-					bool eastWall = ( ( open | missing ) & Direction.East ) == 0;
-					bool southWall = ( ( open | missing ) & Direction.South ) == 0;
-					float east = ( open & Direction.East ) != 0 ? input[i + 1] : eastWall ? origin : 0f;
-					float south = ( open & Direction.South ) != 0 ? input[i + stride] : southWall ? origin : 0f;
-					float southEast;
-					if( ( open & Direction.SouthEast ) != 0 ) {
-						southEast = input[i + stride + 1];
-					} else if( ( missing & Direction.SouthEast ) != 0 ) {
-						southEast = 0f;
-					} else if( southWall ) {
-						southEast = east;
-					} else if( eastWall ) {
-						southEast = south;
-					} else {
-						southEast = origin;
-					}
-
-					float near = origin + ( ( east - origin ) * fx );
-					float far = south + ( ( southEast - south ) * fx );
-					return near + ( ( far - near ) * fy );
-	}
-
-	private static void Step(
-		IGridChunkLayout layout,
-		int size,
-		Direction direction,
-		ref int slot,
-		ref int column,
-		ref int row
-	) {
-		switch( direction ) {
-			case Direction.East:
-				if( ++column == size ) {
-					column = 0;
-					slot = layout.GetNeighbour( slot, Direction.East );
-				}
-				break;
-			case Direction.West:
-				if( --column < 0 ) {
-					column = size - 1;
-					slot = layout.GetNeighbour( slot, Direction.West );
-				}
-				break;
-			case Direction.South:
-				if( ++row == size ) {
-					row = 0;
-					slot = layout.GetNeighbour( slot, Direction.South );
-				}
-				break;
-			default:
-				if( --row < 0 ) {
-					row = size - 1;
-					slot = layout.GetNeighbour( slot, Direction.North );
-				}
-				break;
-		}
-	}
-
-	private readonly struct LayerIndexer {
-
-		private readonly int _chunkLength;
+		private readonly ChunkedGridLayout _layout;
+		private readonly ChunkedGridLayer<Direction> _passable;
+		private readonly ChunkedGridLayer<Direction> _vacuum;
+		private readonly ChunkedGridLayer<float> _source;
+		private readonly int _chunk;
+		private readonly ReadOnlySpan<float> _input;
+		private readonly ReadOnlySpan<Direction> _chunkPassable;
+		private readonly ReadOnlySpan<Direction> _chunkVacuum;
+		private readonly int _size;
 		private readonly int _stride;
-		private readonly int _halo;
+		private readonly float _timeStep;
 
-		public LayerIndexer(
-			IGridLayer layer
+		public Walker(
+			ChunkedGridLayout layout,
+			ChunkedGridLayer<Direction> passable,
+			ChunkedGridLayer<Direction> vacuum,
+			ChunkedGridLayer<float> source,
+			int chunk,
+			ReadOnlySpan<float> input,
+			ReadOnlySpan<Direction> chunkPassable,
+			ReadOnlySpan<Direction> chunkVacuum,
+			int size,
+			int stride,
+			float timeStep
 		) {
-			_chunkLength = layer.ChunkLength;
-			_stride = layer.Stride;
-			_halo = layer.Halo;
+			_layout = layout;
+			_passable = passable;
+			_vacuum = vacuum;
+			_source = source;
+			_chunk = chunk;
+			_input = input;
+			_chunkPassable = chunkPassable;
+			_chunkVacuum = chunkVacuum;
+			_size = size;
+			_stride = stride;
+			_timeStep = timeStep;
 		}
 
-		public int Index(
-			int slot,
+		public float AdvectCell(
+			float velocityX,
+			float velocityY,
 			int column,
 			int row
-		) => ( slot * _chunkLength ) + ( ( row + _halo ) * _stride ) + column + _halo;
+		) {
+			float self = _input[( ( row + Halo ) * _stride ) + column + Halo];
+			float dx = -velocityX * _timeStep;
+			float dy = -velocityY * _timeStep;
+			if( ( dx == 0f && dy == 0f ) || !float.IsFinite( dx ) || !float.IsFinite( dy ) ) {
+				return self;
+			}
+
+			// Walk to the cell containing the backtraced position, so displacements of
+			// more than one cell are interpolated rather than truncated.
+			float floorX = MathF.Floor( dx );
+			float floorY = MathF.Floor( dy );
+			float fx = dx - floorX;
+			float fy = dy - floorY;
+			int remainingX = Math.Abs( (int)floorX );
+			int remainingY = Math.Abs( (int)floorY );
+			Direction horizontal = floorX < 0f ? Direction.West : Direction.East;
+			Direction vertical = floorY < 0f ? Direction.North : Direction.South;
+			int s = _chunk;
+			int c = column;
+			int r = row;
+			ReadOnlySpan<Direction> passable = _chunkPassable;
+			ReadOnlySpan<Direction> vacuum = _chunkVacuum;
+			bool inVacuum = false;
+			while( remainingX > 0 || remainingY > 0 ) {
+				bool moveX = remainingX >= remainingY;
+				Direction step = moveX ? horizontal : vertical;
+				int f = ( r * _size ) + c;
+				if( ( passable[f] & step ) != 0 ) {
+					if( Step( step, ref s, ref c, ref r ) ) {
+						passable = s == _chunk ? _chunkPassable : _passable.GetValues( s );
+						vacuum = s == _chunk ? _chunkVacuum : _vacuum.GetValues( s );
+					}
+					if( moveX ) {
+						remainingX--;
+					} else {
+						remainingY--;
+					}
+				} else if( ( vacuum[f] & step ) != 0 ) {
+					inVacuum = true;
+					break;
+				} else if( moveX ) {
+					remainingX = 0;
+					fx = 0f;
+				} else {
+					remainingY = 0;
+					fy = 0f;
+				}
+			}
+			if( inVacuum ) {
+				return 0f;
+			}
+
+			int flagIndex = ( r * _size ) + c;
+			Direction open = passable[flagIndex];
+			Direction missing = vacuum[flagIndex];
+			bool eastOpen = ( open & Direction.East ) != 0;
+			bool southOpen = ( open & Direction.South ) != 0;
+			bool southEastOpen = ( open & Direction.SouthEast ) != 0;
+			float origin;
+			float eastValue = 0f;
+			float southValue = 0f;
+			float southEastValue = 0f;
+			if( s == _chunk ) {
+				int i = ( ( r + Halo ) * _stride ) + c + Halo;
+				origin = _input[i];
+				if( eastOpen ) {
+					eastValue = _input[i + 1];
+				}
+				if( southOpen ) {
+					southValue = _input[i + _stride];
+				}
+				if( southEastOpen ) {
+					southEastValue = _input[i + _stride + 1];
+				}
+			} else {
+				origin = _source.GetValues( s )[flagIndex];
+				if( eastOpen ) {
+					eastValue = Sample( s, c + 1, r );
+				}
+				if( southOpen ) {
+					southValue = Sample( s, c, r + 1 );
+				}
+				if( southEastOpen ) {
+					southEastValue = Sample( s, c + 1, r + 1 );
+				}
+			}
+
+			bool eastWall = ( ( open | missing ) & Direction.East ) == 0;
+			bool southWall = ( ( open | missing ) & Direction.South ) == 0;
+			float east = eastOpen ? eastValue : eastWall ? origin : 0f;
+			float south = southOpen ? southValue : southWall ? origin : 0f;
+			float southEast;
+			if( southEastOpen ) {
+				southEast = southEastValue;
+			} else if( ( missing & Direction.SouthEast ) != 0 ) {
+				southEast = 0f;
+			} else if( southWall ) {
+				southEast = east;
+			} else if( eastWall ) {
+				southEast = south;
+			} else {
+				southEast = origin;
+			}
+
+			float near = origin + ( ( east - origin ) * fx );
+			float far = south + ( ( southEast - south ) * fx );
+			return near + ( ( far - near ) * fy );
+		}
+
+		// Reads the value at a local cell of chunk s that may be one past its east or south edge,
+		// resolving it in the neighbouring chunk; a missing chunk reads as 0.
+		private float Sample(
+			int s,
+			int column,
+			int row
+		) {
+			int dx = column == _size ? 1 : 0;
+			int dy = row == _size ? 1 : 0;
+			int target = s;
+			if( dx != 0 || dy != 0 ) {
+				target = _layout.GetNeighbours( s )[( ( dy + 1 ) * 3 ) + dx + 1];
+				if( target == NoChunk ) {
+					return 0f;
+				}
+				column -= dx * _size;
+				row -= dy * _size;
+			}
+			return _source.GetValues( target )[( row * _size ) + column];
+		}
+
+		// Moves one cell in direction, returning true when the walker crossed into another chunk.
+		private bool Step(
+			Direction direction,
+			ref int chunk,
+			ref int column,
+			ref int row
+		) {
+			switch( direction ) {
+				case Direction.East:
+					if( ++column < _size ) {
+						return false;
+					}
+					column = 0;
+					break;
+				case Direction.West:
+					if( --column >= 0 ) {
+						return false;
+					}
+					column = _size - 1;
+					break;
+				case Direction.South:
+					if( ++row < _size ) {
+						return false;
+					}
+					row = 0;
+					break;
+				default:
+					if( --row >= 0 ) {
+						return false;
+					}
+					row = _size - 1;
+					break;
+			}
+			chunk = _layout.GetNeighbours( chunk )[direction.ToNeighbourIndex()];
+			return true;
+		}
 
 	}
 

@@ -20,7 +20,7 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # Topology.GridDiffusion
 | Method | Mean     | Error   | StdDev  | Allocated |
 |------- |---------:|--------:|--------:|----------:|
-| Update | 25.04 us | 1.397 us | 1.306 us |         - |
+| Update | 22.43 us | 0.619 us | 0.579 us |         - |
 
 # GridPressure
 | Method | Mean     | Error     | StdDev    | Allocated |
@@ -35,7 +35,7 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # Topology.GridPressure
 | Method | Mean     | Error    | StdDev   | Allocated |
 |------- |---------:|---------:|---------:|----------:|
-| Update | 23.68 us | 0.390 us | 0.346 us |         - |
+| Update | 23.22 us | 0.727 us | 0.644 us |         - |
 
 # GridProjection
 | Method | Mean     | Error    | StdDev   | Allocated |
@@ -50,7 +50,7 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # Topology.GridProjection
 | Method | Mean     | Error   | StdDev  | Allocated |
 |------- |---------:|--------:|--------:|----------:|
-| Update | 573.4 us | 5.21 us | 4.62 us |       6 B |
+| Update | 563.8 us | 28.10 us | 26.29 us |       6 B |
 
 # GridAdvection
 | Method | Mean     | Error   | StdDev  | Allocated |
@@ -65,7 +65,7 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # Topology.GridAdvection
 | Method | Mean     | Error   | StdDev  | Allocated |
 |------- |---------:|--------:|--------:|----------:|
-| Update | 57.24 us | 2.381 us | 2.227 us |         - |
+| Update | 52.28 us | 1.513 us | 1.415 us |         - |
 
 # GridAirflow
 | Method | Mean     | Error    | StdDev   | Allocated |
@@ -80,15 +80,16 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 # Topology.GridAirflow
 | Method | Mean     | Error     | StdDev    | Allocated |
 |------- |---------:|----------:|----------:|----------:|
-| Update | 892.5 us | 36.53 us | 34.17 us |       6 B |
+| Update | 756.3 us | 24.20 us | 22.63 us |       6 B |
 
 # LowFidelity.Atmosphere
-| Method | Mean     | Error   | StdDev  | Allocated |
-|------- |---------:|--------:|--------:|----------:|
-| Update | 246.5 us | 4.21 us | 3.94 us |         - |
+| Method            | Mean      | Error     | StdDev    | Allocated |
+|------------------ |----------:|----------:|----------:|----------:|
+| Update            | 246.15 us |  8.499 us |  7.950 us |         - |
+| ReadPressureFrame |  15.27 us |  0.324 us |  0.303 us |         - |
 
 # LowFidelity.Thermal
 | Method              | Mean     | Error   | StdDev  | Allocated |
 |-------------------- |---------:|--------:|--------:|----------:|
-| Update              | 196.9 us | 5.28 us | 4.68 us |         - |
-| UpdateWithMovingSun | 248.1 us | 7.68 us | 6.41 us |       1 B |
+| Update              | 197.7 us | 5.43 us | 5.08 us |         - |
+| UpdateWithMovingSun | 231.6 us | 8.28 us | 7.34 us |       1 B |

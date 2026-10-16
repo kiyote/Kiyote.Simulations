@@ -7,7 +7,7 @@ namespace Kiyote.Simulations.Benchmarks.Topology.Pressure;
 public class GridPressureBenchmarks {
 
 	private const int Size = 100;
-	private const int ChunkSize = 16;
+	private const int ChunkSize = 32;
 
 	private readonly IGridPressure _pressure;
 	private readonly ICompiledGridAssembly<float> _compiled;
@@ -29,10 +29,10 @@ public class GridPressureBenchmarks {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		_compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open(), 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open() );
 		_neighbourhood = _pressure.CreateNeighbourhood( _compiled, connectivity );
-		_values = _compiled.Bind<float, Identity>( default, 1 );
-		_scratch = _compiled.CreateLayer<float>( 1 );
+		_values = _compiled.Bind<float, Identity>( default );
+		_scratch = _compiled.CreateLayer<float>();
 	}
 
 	[Benchmark]

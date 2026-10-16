@@ -12,7 +12,7 @@ namespace Kiyote.Simulations.Visualizer.Topology.Airflow;
 internal sealed class GridAirflowVisualizer {
 
 	public const int Size = 100;
-	public const int ChunkSize = 16;
+	public const int ChunkSize = 32;
 	public const int TotalFrameCount = 100;
 	public const int StepsPerFrame = 4;
 
@@ -74,21 +74,21 @@ internal sealed class GridAirflowVisualizer {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		using ICompiledGridAssembly<float> compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy, 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy );
 		AirflowNeighbourhood neighbourhood = _airflow.CreateNeighbourhood( compiled, connectivity );
-		IGridLayer<float> inputPressure = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> outputPressure = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> inputVelocityX = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> inputVelocityY = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> outputVelocityX = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> outputVelocityY = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> intermediateVelocityX = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> intermediateVelocityY = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> projectionPressure = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> projectionPressureScratch = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> projectionDivergence = compiled.CreateLayer<float>( 0 );
-		IGridLayer<float> inputConcentration = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> outputConcentration = compiled.CreateLayer<float>( 1 );
+		IGridLayer<float> inputPressure = compiled.CreateLayer<float>();
+		IGridLayer<float> outputPressure = compiled.CreateLayer<float>();
+		IGridLayer<float> inputVelocityX = compiled.CreateLayer<float>();
+		IGridLayer<float> inputVelocityY = compiled.CreateLayer<float>();
+		IGridLayer<float> outputVelocityX = compiled.CreateLayer<float>();
+		IGridLayer<float> outputVelocityY = compiled.CreateLayer<float>();
+		IGridLayer<float> intermediateVelocityX = compiled.CreateLayer<float>();
+		IGridLayer<float> intermediateVelocityY = compiled.CreateLayer<float>();
+		IGridLayer<float> projectionPressure = compiled.CreateLayer<float>();
+		IGridLayer<float> projectionPressureScratch = compiled.CreateLayer<float>();
+		IGridLayer<float> projectionDivergence = compiled.CreateLayer<float>();
+		IGridLayer<float> inputConcentration = compiled.CreateLayer<float>();
+		IGridLayer<float> outputConcentration = compiled.CreateLayer<float>();
 
 		using IAnimationBuilder pressureBuilder = _animation.StartAnimation( _fileSystem.Path.Combine( outputFolder, $"topology_airflow_pressure_{suffix}.gif" ), TimeSpan.FromMilliseconds( 100 ) );
 		using IAnimationBuilder velocityBuilder = _animation.StartAnimation( _fileSystem.Path.Combine( outputFolder, $"topology_airflow_velocity_{suffix}.gif" ), TimeSpan.FromMilliseconds( 100 ) );

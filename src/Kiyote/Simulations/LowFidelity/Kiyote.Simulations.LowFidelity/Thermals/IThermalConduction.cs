@@ -1,19 +1,18 @@
-using Kiyote.Geometry.Topology;
-
 namespace Kiyote.Simulations.LowFidelity.Thermals;
 
 internal interface IThermalConduction {
 
 	// Writes temperatureNext from temperature plus heat exchanged across faces shared with
 	// occupied neighbours. Unoccupied cells have zero capacity and exchange nothing.
+	// temperature, conductivity and capacity are padded spans; temperatureNext is a chunk span
+	// (see AtmosphereSimd). Every cell of temperatureNext is written.
 	void Conduct(
-		int slot,
-		ReadOnlySpan<ulong> mask,
+		ReadOnlySpan<ulong> presence,
 		float dt,
-		IGridLayer<float> temperature,
-		IGridLayer<float> conductivity,
-		IGridLayer<float> capacity,
-		IGridLayer<float> temperatureNext
+		ReadOnlySpan<float> temperature,
+		ReadOnlySpan<float> conductivity,
+		ReadOnlySpan<float> capacity,
+		Span<float> temperatureNext
 	);
 
 }

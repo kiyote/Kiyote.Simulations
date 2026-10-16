@@ -1,4 +1,4 @@
-using Kiyote.Geometry;
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
 
@@ -17,38 +17,36 @@ internal sealed class ThermalSolar : IThermalSolar {
 	];
 
 	void IThermalSolar.Illuminate(
-		IGridChunkLayout layout,
+		ChunkedGridLayout layout,
 		Vector sunDirection,
 		float flux,
-		IGridLayer<float> absorptivityLayer,
-		IGridLayer<Direction> vacuumLayer,
-		IGridLayer<float> solarLayer
+		ChunkedGridLayer<float> absorptivityLayer,
+		ChunkedGridLayer<Direction> vacuumLayer,
+		ChunkedGridLayer<float> solarLayer
 	) {
-		Span<float> solar = solarLayer.Cells;
-		solar.Clear();
+		solarLayer.ClearValues();
 		float length = MathF.Sqrt( ( sunDirection.X * sunDirection.X ) + ( sunDirection.Y * sunDirection.Y ) );
-		Rect? bounds = layout.Bounds;
-		if( length <= 0.0f || flux <= 0.0f || !bounds.HasValue ) {
+		if( length <= 0.0f
+			|| flux <= 0.0f
+			|| !layout.TryGetPopulatedBounds( out int left, out int top, out int width, out int height )
+		) {
 			return;
 		}
+		Bounds bounds = new Bounds( left, top, left + width - 1, top + height - 1 );
 		float sx = sunDirection.X / length;
 		float sy = sunDirection.Y / length;
-		Span<float> absorptivity = absorptivityLayer.Cells;
-		Span<Direction> vacuum = vacuumLayer.Cells;
 
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
-				continue;
-			}
-			ReadOnlySpan<ulong> mask = layout.GetValidityMask( slot );
-			Point origin = layout.GetOrigin( slot );
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+			ReadOnlySpan<float> absorptivity = absorptivityLayer.GetValues( chunk );
+			ReadOnlySpan<Direction> vacuum = vacuumLayer.GetValues( chunk );
+			Span<float> solar = solarLayer.GetValues( chunk );
+			int originX = layout.GetChunkColumn( chunk ) << layout.ChunkShift;
+			int originY = layout.GetChunkRow( chunk ) << layout.ChunkShift;
 			for( int row = 0; row < ChunkSize; row++ ) {
-				uint bits = GetRowMask( mask, row );
-				if( bits == 0 ) {
-					continue;
-				}
-				int start = solarLayer.IndexOf( slot, 0, row );
-				for( int column = 0; column < ChunkSize; column++ ) {
+				uint bits = GetRowMask( presence, row );
+				int start = ChunkIndex( 0, row );
+				for( int column = 0; bits != 0 && column < ChunkSize; column++ ) {
 					int i = start + column;
 					if( ( bits & ( 1u << column ) ) == 0 || vacuum[i] == Direction.None ) {
 						continue;
@@ -60,9 +58,9 @@ internal sealed class ThermalSolar : IThermalSolar {
 							continue;
 						}
 						// Start at the face's midpoint, just outside the cell.
-						float x = origin.X + column + 0.5f + ( nx * 0.5f );
-						float y = origin.Y + row + 0.5f + ( ny * 0.5f );
-						if( IsLit( layout, bounds.Value, x, y, sx, sy ) ) {
+						float x = originX + column + 0.5f + ( nx * 0.5f );
+						float y = originY + row + 0.5f + ( ny * 0.5f );
+						if( IsLit( layout, bounds, x, y, sx, sy ) ) {
 							exposure += facing;
 						}
 					}
@@ -74,8 +72,8 @@ internal sealed class ThermalSolar : IThermalSolar {
 
 	// Marches towards the sun until the ray leaves the grid's bounds or hits an occupied cell.
 	private static bool IsLit(
-		IGridChunkLayout layout,
-		Rect bounds,
+		ChunkedGridLayout layout,
+		Bounds bounds,
 		float x,
 		float y,
 		float sx,
@@ -84,7 +82,7 @@ internal sealed class ThermalSolar : IThermalSolar {
 		x += sx * RayStep;
 		y += sy * RayStep;
 		while( x >= bounds.X1 - 1 && x <= bounds.X2 + 1 && y >= bounds.Y1 - 1 && y <= bounds.Y2 + 1 ) {
-			if( layout.TryGetCell( (int)MathF.Floor( x ), (int)MathF.Floor( y ), out _, out _ ) ) {
+			if( layout.IsPopulated( (int)MathF.Floor( x ), (int)MathF.Floor( y ) ) ) {
 				return false;
 			}
 			x += sx * RayStep;
@@ -92,5 +90,12 @@ internal sealed class ThermalSolar : IThermalSolar {
 		}
 		return true;
 	}
+
+	private readonly record struct Bounds(
+		int X1,
+		int Y1,
+		int X2,
+		int Y2
+	);
 
 }

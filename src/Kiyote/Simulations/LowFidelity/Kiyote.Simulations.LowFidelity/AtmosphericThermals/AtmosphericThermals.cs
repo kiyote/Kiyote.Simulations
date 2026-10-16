@@ -1,3 +1,4 @@
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
@@ -9,8 +10,6 @@ namespace Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalStrategy> : IAtmosphericThermals
 	where TAtmosphereStrategy : struct, IAtmosphereCellStrategy<TCell>
 	where TThermalStrategy : struct, IThermalCellStrategy<TCell> {
-
-	private const int Halo = 0;
 
 	private static readonly (int Column, int Row)[] Faces = [( 0, -1 ), ( 1, 0 ), ( 0, 1 ), ( -1, 0 )];
 
@@ -120,19 +119,17 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	// (occupied and impermeable). Only changes with the topology.
 	private void BuildLinks() {
 		using ICompiledGridAssembly<TCell> compiled = _compiler.Compile( _assembly, ChunkSize );
-		IGridLayer<bool> permeable = compiled.Bind<bool, PermeabilityBinding<TCell, TAtmosphereStrategy>>( new PermeabilityBinding<TCell, TAtmosphereStrategy>( _atmosphereStrategy ), Halo );
-		IGridLayer<float> conductance = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _conductances ), Halo );
-		IGridLayer<float> capacity = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _capacities ), Halo );
-		IGridChunkLayout layout = compiled.ChunkLayout;
+		IGridLayer<bool> permeable = compiled.Bind<bool, PermeabilityBinding<TCell, TAtmosphereStrategy>>( new PermeabilityBinding<TCell, TAtmosphereStrategy>( _atmosphereStrategy ) );
+		IGridLayer<float> conductance = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _conductances ) );
+		IGridLayer<float> capacity = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _capacities ) );
+		ChunkedGridLayout layout = compiled.ChunkLayout;
 
 		List<ConvectionCell> cells = [];
 		List<ConvectionLink> links = [];
-		Rect? bounds = layout.Bounds;
-		if( bounds.HasValue ) {
-			Rect area = bounds.Value;
-			for( int row = area.Y1; row <= area.Y2; row++ ) {
-				for( int column = area.X1; column <= area.X2; column++ ) {
-					if( !layout.TryGetCell( column, row, out _, out _ ) || !permeable[column, row] ) {
+		if( layout.TryGetPopulatedBounds( out int left, out int top, out int width, out int height ) ) {
+			for( int row = top; row < top + height; row++ ) {
+				for( int column = left; column < left + width; column++ ) {
+					if( !layout.IsPopulated( column, row ) || !permeable[column, row] ) {
 						continue;
 					}
 					int first = links.Count;
@@ -140,7 +137,7 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 					foreach( (int dc, int dr) in Faces ) {
 						int c = column + dc;
 						int r = row + dr;
-						if( layout.TryGetCell( c, r, out _, out _ ) && !permeable[c, r] ) {
+						if( layout.IsPopulated( c, r ) && !permeable[c, r] ) {
 							links.Add( new ConvectionLink( c, r, conductance[c, r], capacity[c, r] ) );
 						}
 					}

@@ -1,3 +1,4 @@
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
@@ -6,8 +7,6 @@ namespace Kiyote.Simulations.LowFidelity.Thermals;
 
 internal sealed class Thermal<TCell, TStrategy> : IThermal
 	where TStrategy : struct, IThermalCellStrategy<TCell> {
-
-	private const int Halo = 1;
 
 	private readonly IGridAssembly<TCell> _assembly;
 	private readonly TStrategy _strategy;
@@ -22,6 +21,9 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 	private readonly float[] _capacities;
 	private readonly float[] _emissivities;
 	private readonly float[] _absorptivities;
+	private readonly float[] _temperaturePadded;
+	private readonly float[] _conductivityPadded;
+	private readonly float[] _capacityPadded;
 	private Vector _sunDirection;
 	private bool _topologyChanged;
 	private bool _solarStale;
@@ -62,6 +64,9 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_capacities = [.. materials.Definitions.Select( d => d.HeatCapacity )];
 		_emissivities = [.. materials.Definitions.Select( d => d.Emissivity )];
 		_absorptivities = [.. materials.Definitions.Select( d => d.Absorptivity )];
+		_temperaturePadded = new float[PaddedArea];
+		_conductivityPadded = new float[PaddedArea];
+		_capacityPadded = new float[PaddedArea];
 		Compile();
 	}
 
@@ -91,7 +96,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 			RebuildStructure();
 		}
 		if( _solarStale ) {
-			_solar.Illuminate( _compiled.ChunkLayout, _sunDirection, _settings.SolarFlux, _absorptivity, _vacuum, _solarPower );
+			_solar.Illuminate( _compiled.ChunkLayout, _sunDirection, _settings.SolarFlux, _absorptivity.Values, _vacuum.Values, _solarPower.Values );
 			_solarStale = false;
 		}
 
@@ -116,16 +121,17 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		int row,
 		float joules
 	) {
-		if( !TryGetIndex( column, row, out int slot, out int index ) ) {
+		ObjectDisposedException.ThrowIf( _disposed, this );
+		if( !_compiled.ChunkLayout.TryLocate( column, row, out int chunk, out int local ) ) {
 			return;
 		}
-		float capacity = _capacity.Cells[index];
+		float capacity = _capacity.Values.GetValues( chunk )[local];
 		if( capacity <= 0.0f ) {
 			return;
 		}
-		ref float t = ref _temperature.Cells[index];
+		ref float t = ref _temperature.Values.GetValues( chunk )[local];
 		t = MathF.Max( 0.0f, t + ( joules / capacity ) );
-		_temperature.MarkDirty( slot );
+		_temperature.MarkDirty( chunk );
 	}
 
 	void IThermal.Commit() {
@@ -157,9 +163,9 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 	)]
 	private void Compile() {
 		_compiled = _compiler.Compile( _assembly, ChunkSize );
-		_temperature = _compiled.Bind<float, ThermalTemperatureBinding<TCell, TStrategy>>( new ThermalTemperatureBinding<TCell, TStrategy>( _strategy ), Halo );
-		_temperatureNext = _compiled.CreateLayer<float>( Halo );
-		_solarPower = _compiled.CreateLayer<float>( Halo );
+		_temperature = _compiled.Bind<float, ThermalTemperatureBinding<TCell, TStrategy>>( new ThermalTemperatureBinding<TCell, TStrategy>( _strategy ) );
+		_temperatureNext = _compiled.CreateLayer<float>();
+		_solarPower = _compiled.CreateLayer<float>();
 		BindStructure();
 		_topologyChanged = false;
 		_solarStale = true;
@@ -186,56 +192,50 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_capacity = BindProperty( _capacities );
 		_emissivity = BindProperty( _emissivities );
 		_absorptivity = BindProperty( _absorptivities );
-		_vacuum = _compiled.CreateVacuumLayer( Halo );
+		_vacuum = _compiled.CreateVacuumLayer();
 	}
 
 	private IGridLayer<float> BindProperty(
 		float[] values
 	) {
-		return _compiled.Bind<float, MaterialPropertyBinding<TCell, TStrategy>>( new MaterialPropertyBinding<TCell, TStrategy>( _strategy, values ), Halo );
+		return _compiled.Bind<float, MaterialPropertyBinding<TCell, TStrategy>>( new MaterialPropertyBinding<TCell, TStrategy>( _strategy, values ) );
 	}
 
+	// Every non-empty chunk writes every cell of temperatureNext, so the layers can be swapped
+	// rather than copied back. Empty chunks hold no cells, so their values never matter.
 	private void Step(
 		float dt
 	) {
-		IGridChunkLayout layout = _compiled.ChunkLayout;
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) != ChunkState.Empty ) {
-				_temperature.ExchangeHalo( slot );
-				_capacity.ExchangeHalo( slot );
-				_conductivity.ExchangeHalo( slot );
-			}
-		}
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
+		ChunkedGridLayout layout = _compiled.ChunkLayout;
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			if( IsEmpty( layout, chunk ) ) {
 				continue;
 			}
-			ReadOnlySpan<ulong> mask = layout.GetValidityMask( slot );
-			_conduction.Conduct( slot, mask, dt, _temperature, _conductivity, _capacity, _temperatureNext );
-			_radiation.Radiate( slot, mask, dt, _settings.StefanBoltzmann, _settings.SpaceTemperature, _emissivity, _capacity, _solarPower, _vacuum, _temperatureNext );
+			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+			Span<float> next = _temperatureNext.Values.GetValues( chunk );
+			Gather( _temperature, chunk, _temperaturePadded );
+			Gather( _conductivity, chunk, _conductivityPadded );
+			Gather( _capacity, chunk, _capacityPadded );
+			_conduction.Conduct( presence, dt, _temperaturePadded, _conductivityPadded, _capacityPadded, next );
+			_radiation.Radiate(
+				presence,
+				dt,
+				_settings.StefanBoltzmann,
+				_settings.SpaceTemperature,
+				_emissivity.Values.GetValues( chunk ),
+				_capacity.Values.GetValues( chunk ),
+				_solarPower.Values.GetValues( chunk ),
+				_vacuum.Values.GetValues( chunk ),
+				next
+			);
 		}
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
-				continue;
-			}
-			_temperatureNext.GetChunk( slot ).CopyTo( _temperature.GetChunk( slot ) );
-			_temperature.MarkDirty( slot );
-		}
-	}
 
-	private bool TryGetIndex(
-		int column,
-		int row,
-		out int slot,
-		out int index
-	) {
-		ObjectDisposedException.ThrowIf( _disposed, this );
-		if( !_compiled.ChunkLayout.TryGetCell( column, row, out slot, out int local ) ) {
-			index = -1;
-			return false;
+		_compiled.Swap( _temperature, _temperatureNext );
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			if( !IsEmpty( layout, chunk ) ) {
+				_temperature.MarkDirty( chunk );
+			}
 		}
-		index = _temperature.IndexOf( slot, local % ChunkSize, local / ChunkSize );
-		return true;
 	}
 
 }

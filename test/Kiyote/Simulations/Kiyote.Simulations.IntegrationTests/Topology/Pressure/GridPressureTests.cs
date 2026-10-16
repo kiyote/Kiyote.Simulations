@@ -4,8 +4,8 @@ using Kiyote.Simulations.Topology.Pressure;
 
 namespace Kiyote.Simulations.Topology.Pressure.IntegrationTests;
 
-[TestFixture( 8 )]
-[TestFixture( 16 )]
+[TestFixture( 32 )]
+[TestFixture( 64 )]
 [ExcludeFromCodeCoverage]
 public sealed class GridPressureTests {
 
@@ -77,8 +77,8 @@ public sealed class GridPressureTests {
 	}
 
 	[Test]
-	public void Update_AcrossChunkBoundary_SpreadsThroughHalo() {
-		DenseGridSource<float> grid = Create( 20, 20 );
+	public void Update_AcrossChunkBoundary_SpreadsToNeighbourChunk() {
+		DenseGridSource<float> grid = Create( _chunkSize + 4, _chunkSize + 4 );
 		grid.GetCell( _chunkSize - 1, _chunkSize - 1 ) = 1000f;
 
 		Step( new Open(), 1, (grid, 0, 0) );
@@ -112,10 +112,10 @@ public sealed class GridPressureTests {
 			Assert.That( assembly.TryAttach( grid, column, row ).Succeeded, Is.True );
 		}
 		using ICompiledGridAssembly<float> compiled = new GridCompiler().Compile( assembly, _chunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, strategy, 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, strategy );
 		IGridLayer<Direction> neighbourhood = _pressure.CreateNeighbourhood( compiled, connectivity );
-		IGridLayer<float> values = compiled.Bind<float, Identity>( default, 1 );
-		IGridLayer<float> scratch = compiled.CreateLayer<float>( 1 );
+		IGridLayer<float> values = compiled.Bind<float, Identity>( default );
+		IGridLayer<float> scratch = compiled.CreateLayer<float>();
 		for( int i = 0; i < steps; i++ ) {
 			_pressure.Update( neighbourhood, values, scratch );
 			compiled.Swap( values, scratch );

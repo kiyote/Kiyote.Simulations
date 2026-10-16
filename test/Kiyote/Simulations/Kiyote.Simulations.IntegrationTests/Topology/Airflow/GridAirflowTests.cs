@@ -7,8 +7,8 @@ using Kiyote.Simulations.Topology.Projection;
 
 namespace Kiyote.Simulations.Topology.Airflow.IntegrationTests;
 
-[TestFixture( 8 )]
-[TestFixture( 16 )]
+[TestFixture( 32 )]
+[TestFixture( 64 )]
 [ExcludeFromCodeCoverage]
 public sealed class GridAirflowTests {
 
@@ -35,17 +35,17 @@ public sealed class GridAirflowTests {
 		layers.Step( _airflow, 5 );
 
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( Layers.MaxAbs( layers.Pressure ), Is.Zero );
-			Assert.That( Layers.MaxAbs( layers.VelocityX ), Is.Zero );
-			Assert.That( Layers.MaxAbs( layers.VelocityY ), Is.Zero );
-			Assert.That( Layers.MaxAbs( layers.Concentration ), Is.Zero );
+			Assert.That( layers.MaxAbs( layers.Pressure ), Is.Zero );
+			Assert.That( layers.MaxAbs( layers.VelocityX ), Is.Zero );
+			Assert.That( layers.MaxAbs( layers.VelocityY ), Is.Zero );
+			Assert.That( layers.MaxAbs( layers.Concentration ), Is.Zero );
 		}
 	}
 
 	[Test]
 	public void Update_UniformWind_CarriesConcentrationDownstream() {
 		using Layers layers = Layers.Create( _airflow, new Open(), _chunkSize );
-		Layers.Fill( layers.VelocityX, 5f );
+		layers.Fill( layers.VelocityX, 5f );
 		layers.Concentration[8, 10] = 1000f;
 
 		layers.Step( _airflow, 1 );
@@ -72,7 +72,7 @@ public sealed class GridAirflowTests {
 
 	[Test]
 	public void Update_PressurePeakAcrossChunkBoundary_PushesAirOutward() {
-		using Layers layers = Layers.Create( _airflow, new Open(), _chunkSize );
+		using Layers layers = Layers.Create( _airflow, new Open(), _chunkSize, _chunkSize + 4 );
 		layers.Pressure[_chunkSize - 1, 5] = 1000f;
 
 		layers.Step( _airflow, 1 );
@@ -92,10 +92,10 @@ public sealed class GridAirflowTests {
 		}
 
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( float.IsFinite( Layers.MaxAbs( layers.Pressure ) ), Is.True );
-			Assert.That( float.IsFinite( Layers.MaxAbs( layers.VelocityX ) ), Is.True );
-			Assert.That( float.IsFinite( Layers.MaxAbs( layers.VelocityY ) ), Is.True );
-			Assert.That( float.IsFinite( Layers.MaxAbs( layers.Concentration ) ), Is.True );
+			Assert.That( float.IsFinite( layers.MaxAbs( layers.Pressure ) ), Is.True );
+			Assert.That( float.IsFinite( layers.MaxAbs( layers.VelocityX ) ), Is.True );
+			Assert.That( float.IsFinite( layers.MaxAbs( layers.VelocityY ) ), Is.True );
+			Assert.That( float.IsFinite( layers.MaxAbs( layers.Concentration ) ), Is.True );
 		}
 	}
 
@@ -127,44 +127,48 @@ public sealed class GridAirflowTests {
 		private readonly IGridLayer<float> _projectionPressureScratch;
 		private readonly IGridLayer<float> _projectionDivergence;
 		private readonly IGridLayer<float> _concentrationScratch;
+		private readonly int _size;
 
 		public static Layers Create<TStrategy>(
 			IGridAirflow airflow,
 			TStrategy strategy,
-			int chunkSize
+			int chunkSize,
+			int size = Size
 		) where TStrategy : struct, IConnectivityStrategy<float> {
-			DenseGridSource<float> grid = new DenseGridSource<float>( Size, Size );
-			for( int row = 0; row < Size; row++ ) {
-				for( int column = 0; column < Size; column++ ) {
+			DenseGridSource<float> grid = new DenseGridSource<float>( size, size );
+			for( int row = 0; row < size; row++ ) {
+				for( int column = 0; column < size; column++ ) {
 					grid.TrySetCell( column, row, 0f );
 				}
 			}
 			IGridAssembly<float> assembly = new GridAssembly<float>();
 			Assert.That( assembly.TryAttach( grid, 0, 0 ).Succeeded, Is.True );
 			ICompiledGridAssembly<float> compiled = new GridCompiler().Compile( assembly, chunkSize );
-			IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, strategy, 0 );
-			return new Layers( compiled, airflow.CreateNeighbourhood( compiled, connectivity ) );
+			IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, strategy );
+			return new Layers( compiled, airflow.CreateNeighbourhood( compiled, connectivity ), size );
 		}
 
 		private Layers(
 			ICompiledGridAssembly<float> compiled,
-			AirflowNeighbourhood neighbourhood
+			AirflowNeighbourhood neighbourhood,
+			int size
 		) {
 			_compiled = compiled;
+			_size = size;
 			_neighbourhood = neighbourhood;
-			Pressure = _compiled.CreateLayer<float>( 1 );
-			_pressureScratch = _compiled.CreateLayer<float>( 1 );
-			VelocityX = _compiled.CreateLayer<float>( 1 );
-			VelocityY = _compiled.CreateLayer<float>( 1 );
-			_velocityScratchX = _compiled.CreateLayer<float>( 1 );
-			_velocityScratchY = _compiled.CreateLayer<float>( 1 );
-			_intermediateX = _compiled.CreateLayer<float>( 1 );
-			_intermediateY = _compiled.CreateLayer<float>( 1 );
-			_projectionPressure = _compiled.CreateLayer<float>( 1 );
-			_projectionPressureScratch = _compiled.CreateLayer<float>( 1 );
-			_projectionDivergence = _compiled.CreateLayer<float>( 0 );
-			Concentration = _compiled.CreateLayer<float>( 1 );
-			_concentrationScratch = _compiled.CreateLayer<float>( 1 );
+			Pressure = _compiled.CreateLayer<float>();
+			_pressureScratch = _compiled.CreateLayer<float>();
+			VelocityX = _compiled.CreateLayer<float>();
+			VelocityY = _compiled.CreateLayer<float>();
+			_velocityScratchX = _compiled.CreateLayer<float>();
+			_velocityScratchY = _compiled.CreateLayer<float>();
+			_intermediateX = _compiled.CreateLayer<float>();
+			_intermediateY = _compiled.CreateLayer<float>();
+			_projectionPressure = _compiled.CreateLayer<float>();
+			_projectionPressureScratch = _compiled.CreateLayer<float>();
+			_projectionDivergence = _compiled.CreateLayer<float>();
+			Concentration = _compiled.CreateLayer<float>();
+			_concentrationScratch = _compiled.CreateLayer<float>();
 		}
 
 		public IGridLayer<float> Pressure { get; }
@@ -193,23 +197,23 @@ public sealed class GridAirflowTests {
 			}
 		}
 
-		public static void Fill(
+		public void Fill(
 			IGridLayer<float> layer,
 			float value
 		) {
-			for( int row = 0; row < Size; row++ ) {
-				for( int column = 0; column < Size; column++ ) {
+			for( int row = 0; row < _size; row++ ) {
+				for( int column = 0; column < _size; column++ ) {
 					layer[column, row] = value;
 				}
 			}
 		}
 
-		public static float MaxAbs(
+		public float MaxAbs(
 			IGridLayer<float> layer
 		) {
 			float max = 0f;
-			for( int row = 0; row < Size; row++ ) {
-				for( int column = 0; column < Size; column++ ) {
+			for( int row = 0; row < _size; row++ ) {
+				for( int column = 0; column < _size; column++ ) {
 					float value = layer[column, row];
 					max = float.IsFinite( value ) ? MathF.Max( max, MathF.Abs( value ) ) : float.PositiveInfinity;
 				}

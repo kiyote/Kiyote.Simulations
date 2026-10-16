@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.Topology.Advection;
 using Kiyote.Simulations.Topology.Pressure;
@@ -13,6 +15,7 @@ public sealed class GridAirflow : IGridAirflow {
 	// How strongly the species' pressure gradient accelerates the bulk velocity.
 	private const float PressureForce = 0.05f;
 	private const int Block = 16;
+	private const int Halo = 1;
 
 	private readonly IGridPressure _pressure;
 	private readonly IGridProjection _projection;
@@ -88,13 +91,9 @@ public sealed class GridAirflow : IGridAirflow {
 		IGridLayer<float> velocityX,
 		IGridLayer<float> velocityY
 	) {
-		ArgumentOutOfRangeException.ThrowIfLessThan( pressure.Halo, 1 );
-
-		pressure.ExchangeHalos();
-
-		IGridChunkLayout layout = pressure.Space;
+		ChunkedGridLayout layout = pressure.Layout;
 		int size = layout.ChunkSize;
-		int stride = pressure.Stride;
+		int stride = size + ( 2 * Halo );
 		float scale = _forceScale;
 		Vector256<float> scaleVector = Vector256.Create( scale );
 		Vector256<int> eastBit = Vector256.Create( (int)Direction.East );
@@ -102,44 +101,62 @@ public sealed class GridAirflow : IGridAirflow {
 		Vector256<int> southBit = Vector256.Create( (int)Direction.South );
 		Vector256<int> northBit = Vector256.Create( (int)Direction.North );
 
-		ReadOnlySpan<Direction> flags = neighbourhood.Cells;
-		ReadOnlySpan<float> p = pressure.Cells;
-		Span<float> vx = velocityX.Cells;
-		Span<float> vy = velocityY.Cells;
-		ref byte flagsRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( flags ) );
-		ref float pRef = ref MemoryMarshal.GetReference( p );
-		ref float vxRef = ref MemoryMarshal.GetReference( vx );
-		ref float vyRef = ref MemoryMarshal.GetReference( vy );
-
-		for( int slot = 0; slot < layout.SlotCount; slot++ ) {
-			if( layout.GetState( slot ) == ChunkState.Empty ) {
-				continue;
-			}
-			for( int row = 0; row < size; row++ ) {
-				int flagStart = neighbourhood.IndexOf( slot, 0, row );
-				int pStart = pressure.IndexOf( slot, 0, row );
-				int xStart = velocityX.IndexOf( slot, 0, row );
-				int yStart = velocityY.IndexOf( slot, 0, row );
-
-				int column = 0;
-				for( ; column + Block <= size; column += Block ) {
-					(Vector256<int> include0, Vector256<int> include1) = LoadFlags( ref flagsRef, flagStart + column );
-					int i = pStart + column;
-					ApplyBlock( ref pRef, ref vxRef, ref vyRef, i, xStart + column, yStart + column, stride, include0, eastBit, westBit, southBit, northBit, scaleVector );
-					ApplyBlock( ref pRef, ref vxRef, ref vyRef, i + 8, xStart + column + 8, yStart + column + 8, stride, include1, eastBit, westBit, southBit, northBit, scaleVector );
+		ChunkedGridLayer<Direction> flagValues = neighbourhood.Values;
+		ChunkedGridLayer<float> pressureValues = pressure.Values;
+		ChunkedGridLayer<float> velocityXValues = velocityX.Values;
+		ChunkedGridLayer<float> velocityYValues = velocityY.Values;
+		float[] scratch = ArrayPool<float>.Shared.Rent( ChunkPadding.GetPaddedLength( size, Halo ) );
+		try {
+			foreach( int chunk in layout.EnumerateChunks() ) {
+				if( layout.GetFill( chunk ) == ChunkFill.Empty ) {
+					continue;
 				}
-				for( ; column < size; column++ ) {
-					Direction cell = flags[flagStart + column];
-					int i = pStart + column;
-					float self = p[i];
-					float east = ( cell & Direction.East ) != 0 ? p[i + 1] : self;
-					float west = ( cell & Direction.West ) != 0 ? p[i - 1] : self;
-					float south = ( cell & Direction.South ) != 0 ? p[i + stride] : self;
-					float north = ( cell & Direction.North ) != 0 ? p[i - stride] : self;
-					vx[xStart + column] -= ( east - west ) * scale;
-					vy[yStart + column] -= ( south - north ) * scale;
+				TopologyChunk.GatherPadded( pressureValues, chunk, scratch );
+				ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+				int words = layout.PresenceWordsPerRow;
+				ReadOnlySpan<Direction> flags = flagValues.GetValues( chunk );
+				ReadOnlySpan<float> p = scratch;
+				Span<float> vx = velocityXValues.GetValues( chunk );
+				Span<float> vy = velocityYValues.GetValues( chunk );
+				ref byte flagsRef = ref Unsafe.As<Direction, byte>( ref MemoryMarshal.GetReference( flags ) );
+				ref float pRef = ref MemoryMarshal.GetReference( p );
+				ref float vxRef = ref MemoryMarshal.GetReference( vx );
+				ref float vyRef = ref MemoryMarshal.GetReference( vy );
+
+				for( int row = 0; row < size; row++ ) {
+					if( !TopologyChunk.AnyInRow( presence, words, row ) ) {
+						continue;
+					}
+					int flagStart = row * size;
+					int pStart = ( ( row + Halo ) * stride ) + Halo;
+					int xStart = row * size;
+					int yStart = row * size;
+
+					int column = 0;
+					for( ; column + Block <= size; column += Block ) {
+						if( TopologyChunk.Bits( presence, words, row, column, Block ) == 0 ) {
+							continue;
+						}
+						(Vector256<int> include0, Vector256<int> include1) = LoadFlags( ref flagsRef, flagStart + column );
+						int i = pStart + column;
+						ApplyBlock( ref pRef, ref vxRef, ref vyRef, i, xStart + column, yStart + column, stride, include0, eastBit, westBit, southBit, northBit, scaleVector );
+						ApplyBlock( ref pRef, ref vxRef, ref vyRef, i + 8, xStart + column + 8, yStart + column + 8, stride, include1, eastBit, westBit, southBit, northBit, scaleVector );
+					}
+					for( ; column < size; column++ ) {
+						Direction cell = flags[flagStart + column];
+						int i = pStart + column;
+						float self = p[i];
+						float east = ( cell & Direction.East ) != 0 ? p[i + 1] : self;
+						float west = ( cell & Direction.West ) != 0 ? p[i - 1] : self;
+						float south = ( cell & Direction.South ) != 0 ? p[i + stride] : self;
+						float north = ( cell & Direction.North ) != 0 ? p[i - stride] : self;
+						vx[xStart + column] -= ( east - west ) * scale;
+						vy[yStart + column] -= ( south - north ) * scale;
+					}
 				}
 			}
+		} finally {
+			ArrayPool<float>.Shared.Return( scratch );
 		}
 	}
 

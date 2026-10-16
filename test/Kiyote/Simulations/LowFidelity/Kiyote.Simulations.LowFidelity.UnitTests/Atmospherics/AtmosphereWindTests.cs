@@ -7,23 +7,23 @@ public sealed class AtmosphereWindTests {
 	private const int Y = 3;
 
 	private IAtmosphereWind _wind;
-	private ChunkLayer<float> _temperature;
-	private ChunkLayer<float> _flowEast;
-	private ChunkLayer<float> _flowSouth;
-	private ChunkLayer<float> _pressure;
-	private ChunkLayer<float> _windX;
-	private ChunkLayer<float> _windY;
+	private ChunkBuffer<float> _temperature;
+	private ChunkBuffer<float> _flowEast;
+	private ChunkBuffer<float> _flowSouth;
+	private ChunkBuffer<float> _pressure;
+	private ChunkBuffer<float> _windX;
+	private ChunkBuffer<float> _windY;
 
 	[SetUp]
 	public void SetUp() {
 		_wind = new AtmosphereWind();
-		_temperature = new ChunkLayer<float>();
+		_temperature = ChunkBuffer<float>.Chunk();
 		_temperature.Fill( AtmosphereSimd.ReferenceTemperature * 2.0f );
-		_flowEast = new ChunkLayer<float>();
-		_flowSouth = new ChunkLayer<float>();
-		_pressure = new ChunkLayer<float>();
-		_windX = new ChunkLayer<float>();
-		_windY = new ChunkLayer<float>();
+		_flowEast = ChunkBuffer<float>.Padded();
+		_flowSouth = ChunkBuffer<float>.Padded();
+		_pressure = ChunkBuffer<float>.Chunk();
+		_windX = ChunkBuffer<float>.Chunk();
+		_windY = ChunkBuffer<float>.Chunk();
 	}
 
 	[TestCase( true )]
@@ -33,7 +33,7 @@ public sealed class AtmosphereWindTests {
 	) {
 		_pressure[X, Y] = 100.0f;
 
-		Publish( full, 1.0f );
+		Publish( ChunkMask.Create( full, X, Y ), 1.0f );
 
 		Assert.That( _pressure[X, Y], Is.EqualTo( 200.0f ).Within( 1e-3f ) );
 	}
@@ -48,12 +48,26 @@ public sealed class AtmosphereWindTests {
 		_flowEast[X - 1, Y] = 10.0f;
 		_flowEast[X, Y] = 10.0f;
 
-		Publish( full, 2.0f );
+		Publish( ChunkMask.Create( full, X, Y ), 2.0f );
 
 		using( Assert.EnterMultipleScope() ) {
 			Assert.That( _windX[X, Y], Is.EqualTo( 2.0f ).Within( 1e-4f ) );
 			Assert.That( _windY[X, Y], Is.Zero );
 		}
+	}
+
+	[TestCase( true )]
+	[TestCase( false )]
+	public void Publish_SouthwardFlowFromNorthChunk_ProducesSouthWind(
+		bool full
+	) {
+		_pressure[X, 0] = 100.0f;
+		_flowSouth[X, -1] = 10.0f;
+		_flowSouth[X, 0] = 10.0f;
+
+		Publish( ChunkMask.Create( full, X, 0 ), 2.0f );
+
+		Assert.That( _windY[X, 0], Is.EqualTo( 2.0f ).Within( 1e-4f ) );
 	}
 
 	[TestCase( true )]
@@ -64,7 +78,7 @@ public sealed class AtmosphereWindTests {
 		_flowSouth[X, Y] = 10.0f;
 		_windY[X, Y] = 7.0f;
 
-		Publish( full, 1.0f );
+		Publish( ChunkMask.Create( full, X, Y ), 1.0f );
 
 		using( Assert.EnterMultipleScope() ) {
 			Assert.That( _windX[X, Y], Is.Zero );
@@ -73,19 +87,18 @@ public sealed class AtmosphereWindTests {
 	}
 
 	private void Publish(
-		bool full,
+		ulong[] mask,
 		float windScale
 	) {
 		_wind.Publish(
-			0,
-			full ? ChunkMask.Full() : ChunkMask.Cell( X, Y ),
+			mask,
 			windScale,
-			_temperature,
-			_flowEast,
-			_flowSouth,
-			_pressure,
-			_windX,
-			_windY
+			_temperature.Span,
+			_flowEast.Span,
+			_flowSouth.Span,
+			_pressure.Span,
+			_windX.Span,
+			_windY.Span
 		);
 	}
 

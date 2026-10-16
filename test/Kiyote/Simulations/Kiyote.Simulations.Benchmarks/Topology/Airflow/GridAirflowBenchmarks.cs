@@ -10,7 +10,7 @@ namespace Kiyote.Simulations.Benchmarks.Topology.Airflow;
 public class GridAirflowBenchmarks {
 
 	private const int Size = 100;
-	private const int ChunkSize = 16;
+	private const int ChunkSize = 32;
 
 	private readonly IGridAirflow _airflow;
 	private readonly ICompiledGridAssembly<float> _compiled;
@@ -49,21 +49,21 @@ public class GridAirflowBenchmarks {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		_compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open(), 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open() );
 		_neighbourhood = _airflow.CreateNeighbourhood( _compiled, connectivity );
-		_intermediateVelocityX = _compiled.CreateLayer<float>( 1 );
-		_intermediateVelocityY = _compiled.CreateLayer<float>( 1 );
-		_projectionPressure = _compiled.CreateLayer<float>( 1 );
-		_projectionPressureScratch = _compiled.CreateLayer<float>( 1 );
-		_projectionDivergence = _compiled.CreateLayer<float>( 0 );
-		_inputPressure = _compiled.CreateLayer<float>( 1 );
-		_outputPressure = _compiled.CreateLayer<float>( 1 );
-		_inputVelocityX = _compiled.CreateLayer<float>( 1 );
-		_inputVelocityY = _compiled.CreateLayer<float>( 1 );
-		_outputVelocityX = _compiled.CreateLayer<float>( 1 );
-		_outputVelocityY = _compiled.CreateLayer<float>( 1 );
-		_inputConcentration = _compiled.CreateLayer<float>( 1 );
-		_outputConcentration = _compiled.CreateLayer<float>( 1 );
+		_intermediateVelocityX = _compiled.CreateLayer<float>();
+		_intermediateVelocityY = _compiled.CreateLayer<float>();
+		_projectionPressure = _compiled.CreateLayer<float>();
+		_projectionPressureScratch = _compiled.CreateLayer<float>();
+		_projectionDivergence = _compiled.CreateLayer<float>();
+		_inputPressure = _compiled.CreateLayer<float>();
+		_outputPressure = _compiled.CreateLayer<float>();
+		_inputVelocityX = _compiled.CreateLayer<float>();
+		_inputVelocityY = _compiled.CreateLayer<float>();
+		_outputVelocityX = _compiled.CreateLayer<float>();
+		_outputVelocityY = _compiled.CreateLayer<float>();
+		_inputConcentration = _compiled.CreateLayer<float>();
+		_outputConcentration = _compiled.CreateLayer<float>();
 
 		_inputPressure[50, 50] = 1000f;
 		_inputVelocityX[50, 50] = 40f;

@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Kiyote.Buffers" />
     <PackageReference Include="Kiyote.Geometry" />
   </ItemGroup>
 

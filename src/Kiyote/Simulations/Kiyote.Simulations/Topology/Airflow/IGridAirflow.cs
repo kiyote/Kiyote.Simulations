@@ -9,8 +9,8 @@ namespace Kiyote.Simulations.Topology.Airflow;
 //   3. accelerate intermediateVelocity down the species' pressure gradient,
 //   4. project intermediateVelocity onto its divergence-free part (-> destinationVelocity),
 //   5. advect the concentration along destinationVelocity.
-// All layers must come from the same, unchanging compiled assembly and need a halo of at
-// least 1 (projectionDivergence may have any halo). All layers, including the intermediate
+// All layers must come from the same, unchanging compiled assembly; no halo is needed, as
+// neighbouring values are read across chunk borders directly. All layers, including the intermediate
 // velocity and projection scratch, are caller-owned; the caller swaps source and
 // destination layers afterwards. Call once per species, sharing the velocity layers.
 public interface IGridAirflow {

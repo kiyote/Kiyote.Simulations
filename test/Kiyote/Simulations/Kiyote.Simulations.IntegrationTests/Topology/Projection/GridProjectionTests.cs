@@ -4,8 +4,8 @@ using Kiyote.Simulations.Topology.Projection;
 
 namespace Kiyote.Simulations.Topology.Projection.IntegrationTests;
 
-[TestFixture( 8 )]
-[TestFixture( 16 )]
+[TestFixture( 32 )]
+[TestFixture( 64 )]
 [ExcludeFromCodeCoverage]
 public sealed class GridProjectionTests {
 
@@ -75,7 +75,7 @@ public sealed class GridProjectionTests {
 
 	[Test]
 	public void Update_AcrossChunkBoundary_PressureReachesNeighbourChunk() {
-		Cells cells = new Cells( 20, 20 );
+		Cells cells = new Cells( _chunkSize + 4, _chunkSize + 4 );
 		cells.X.GetCell( _chunkSize - 1, _chunkSize - 1 ) = 5f;
 
 		Step( new Open(), 1, cells );
@@ -106,6 +106,42 @@ public sealed class GridProjectionTests {
 		}
 	}
 
+	[Test]
+	public void Update_SpanningChunks_MatchesSingleChunk() {
+		const int size = 40;
+		// Offset so the grid straddles the corner where four chunks meet.
+		int offset = _chunkSize - ( size / 2 );
+		Cells spanning = CreatePattern( size );
+		Cells single = CreatePattern( size );
+
+		Step( new Box( offset + 12, offset + 12, offset + 27, offset + 27 ), 3, (spanning, offset, offset) );
+		Step( GridCompiler.MinimumChunkSize * 2, new Box( 12, 12, 27, 27 ), 3, (single, 0, 0) );
+
+		using( Assert.EnterMultipleScope() ) {
+			for( int row = 0; row < size; row++ ) {
+				for( int column = 0; column < size; column++ ) {
+					Assert.That( spanning.X.GetCell( column, row ), Is.EqualTo( single.X.GetCell( column, row ) ).Within( 1e-4f ), $"X ({column},{row})" );
+					Assert.That( spanning.Y.GetCell( column, row ), Is.EqualTo( single.Y.GetCell( column, row ) ).Within( 1e-4f ), $"Y ({column},{row})" );
+					Assert.That( spanning.Pressure.GetCell( column, row ), Is.EqualTo( single.Pressure.GetCell( column, row ) ).Within( 1e-4f ), $"P ({column},{row})" );
+				}
+			}
+		}
+	}
+
+	// A deterministic, uneven velocity field.
+	private static Cells CreatePattern(
+		int size
+	) {
+		Cells cells = new Cells( size, size );
+		for( int row = 0; row < size; row++ ) {
+			for( int column = 0; column < size; column++ ) {
+				cells.X.GetCell( column, row ) = ( ( ( column * 37 ) + ( row * 53 ) ) % 11 ) - 5f;
+				cells.Y.GetCell( column, row ) = ( ( ( column * 29 ) + ( row * 17 ) ) % 13 ) - 6f;
+			}
+		}
+		return cells;
+	}
+
 	private void Step<TStrategy>(
 		TStrategy strategy,
 		int steps,
@@ -119,19 +155,28 @@ public sealed class GridProjectionTests {
 		int steps,
 		params (Cells Cells, int Column, int Row)[] placements
 	) where TStrategy : struct, IConnectivityStrategy<float> {
-		using ICompiledGridAssembly<float> x = Compile( placements, p => p.X );
-		using ICompiledGridAssembly<float> y = Compile( placements, p => p.Y );
-		using ICompiledGridAssembly<float> pressure = Compile( placements, p => p.Pressure );
+		Step( _chunkSize, strategy, steps, placements );
+	}
 
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( x, strategy, 0 );
+	private void Step<TStrategy>(
+		int chunkSize,
+		TStrategy strategy,
+		int steps,
+		params (Cells Cells, int Column, int Row)[] placements
+	) where TStrategy : struct, IConnectivityStrategy<float> {
+		using ICompiledGridAssembly<float> x = Compile( chunkSize, placements, p => p.X );
+		using ICompiledGridAssembly<float> y = Compile( chunkSize, placements, p => p.Y );
+		using ICompiledGridAssembly<float> pressure = Compile( chunkSize, placements, p => p.Pressure );
+
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( x, strategy );
 		ProjectionNeighbourhood neighbourhood = _projection.CreateNeighbourhood( x, connectivity );
-		IGridLayer<float> vx = x.Bind<float, Identity>( default, 1 );
-		IGridLayer<float> vxScratch = x.CreateLayer<float>( 1 );
-		IGridLayer<float> vy = y.Bind<float, Identity>( default, 1 );
-		IGridLayer<float> vyScratch = y.CreateLayer<float>( 1 );
-		IGridLayer<float> p = pressure.Bind<float, Identity>( default, 1 );
-		IGridLayer<float> pScratch = pressure.CreateLayer<float>( 1 );
-		IGridLayer<float> divergence = pressure.CreateLayer<float>( 0 );
+		IGridLayer<float> vx = x.Bind<float, Identity>( default );
+		IGridLayer<float> vxScratch = x.CreateLayer<float>();
+		IGridLayer<float> vy = y.Bind<float, Identity>( default );
+		IGridLayer<float> vyScratch = y.CreateLayer<float>();
+		IGridLayer<float> p = pressure.Bind<float, Identity>( default );
+		IGridLayer<float> pScratch = pressure.CreateLayer<float>();
+		IGridLayer<float> divergence = pressure.CreateLayer<float>();
 
 		for( int i = 0; i < steps; i++ ) {
 			_projection.Update( neighbourhood, vx, vy, vxScratch, vyScratch, p, pScratch, divergence );
@@ -143,7 +188,8 @@ public sealed class GridProjectionTests {
 		pressure.Commit();
 	}
 
-	private ICompiledGridAssembly<float> Compile(
+	private static ICompiledGridAssembly<float> Compile(
+		int chunkSize,
 		(Cells Cells, int Column, int Row)[] placements,
 		Func<Cells, DenseGridSource<float>> select
 	) {
@@ -151,7 +197,7 @@ public sealed class GridProjectionTests {
 		foreach( (Cells cells, int column, int row) in placements ) {
 			Assert.That( assembly.TryAttach( select( cells ), column, row ).Succeeded, Is.True );
 		}
-		return new GridCompiler().Compile( assembly, _chunkSize );
+		return new GridCompiler().Compile( assembly, chunkSize );
 	}
 
 	private sealed class Cells {

@@ -4,8 +4,7 @@ namespace Kiyote.Simulations.Topology.Projection;
 
 // Removes the divergent part of a velocity field stored as separate X and Y layers.
 // All layers must come from the same, unchanging compiled assembly; no version checks are
-// performed. Velocity and pressure layers need a halo of at least 1; the source and
-// destination velocity layers must share a halo, as must pressure and pressureScratch.
+// performed. No halo is needed: neighbouring values are read across chunk borders directly.
 // The pressure layer is the warm start for the solve and holds the solved pressure on
 // return; pressureScratch and divergence are caller-owned working storage.
 //

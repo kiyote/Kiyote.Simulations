@@ -7,7 +7,7 @@ namespace Kiyote.Simulations.Benchmarks.Topology.Projection;
 public class GridProjectionBenchmarks {
 
 	private const int Size = 100;
-	private const int ChunkSize = 16;
+	private const int ChunkSize = 32;
 
 	private readonly IGridProjection _projection;
 	private readonly ICompiledGridAssembly<float> _compiled;
@@ -34,15 +34,15 @@ public class GridProjectionBenchmarks {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		_compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open(), 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open() );
 		_neighbourhood = _projection.CreateNeighbourhood( _compiled, connectivity );
-		_velocityX = _compiled.CreateLayer<float>( 1 );
-		_velocityY = _compiled.CreateLayer<float>( 1 );
-		_velocityXScratch = _compiled.CreateLayer<float>( 1 );
-		_velocityYScratch = _compiled.CreateLayer<float>( 1 );
-		_pressure = _compiled.CreateLayer<float>( 1 );
-		_pressureScratch = _compiled.CreateLayer<float>( 1 );
-		_divergence = _compiled.CreateLayer<float>( 0 );
+		_velocityX = _compiled.CreateLayer<float>();
+		_velocityY = _compiled.CreateLayer<float>();
+		_velocityXScratch = _compiled.CreateLayer<float>();
+		_velocityYScratch = _compiled.CreateLayer<float>();
+		_pressure = _compiled.CreateLayer<float>();
+		_pressureScratch = _compiled.CreateLayer<float>();
+		_divergence = _compiled.CreateLayer<float>();
 		for( int row = 0; row < Size; row++ ) {
 			_velocityX[0, row] = 100f;
 		}

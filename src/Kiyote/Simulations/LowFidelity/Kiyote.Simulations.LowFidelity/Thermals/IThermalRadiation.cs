@@ -5,17 +5,17 @@ namespace Kiyote.Simulations.LowFidelity.Thermals;
 internal interface IThermalRadiation {
 
 	// Applies radiative loss from vacuum-facing faces and absorbed sunlight to temperatureNext in place.
+	// All spans are chunk spans (see AtmosphereSimd).
 	void Radiate(
-		int slot,
-		ReadOnlySpan<ulong> mask,
+		ReadOnlySpan<ulong> presence,
 		float dt,
 		float stefanBoltzmann,
 		float spaceTemperature,
-		IGridLayer<float> emissivity,
-		IGridLayer<float> capacity,
-		IGridLayer<float> solar,
-		IGridLayer<Direction> vacuum,
-		IGridLayer<float> temperatureNext
+		ReadOnlySpan<float> emissivity,
+		ReadOnlySpan<float> capacity,
+		ReadOnlySpan<float> solar,
+		ReadOnlySpan<Direction> vacuum,
+		Span<float> temperatureNext
 	);
 
 }

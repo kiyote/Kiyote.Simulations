@@ -1,4 +1,5 @@
 using System.IO.Abstractions;
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Geometry.Topology;
 using Kiyote.Imaging;
@@ -60,12 +61,12 @@ internal sealed class AtmosphereVisualizer {
 			}
 			_ = atmosphere.Update( FrameTime );
 
-			IGridLayer<float> pressure = atmosphere.Pressure;
-			for( int row = 0; row < AsciiGridSource.Height; row++ ) {
-				for( int column = 0; column < AsciiGridSource.Width; column++ ) {
-					_values[column, row] = ship.IsOccupied( column, row )
-						? pressure[column, row]
-						: 0.0f;
+			// Read the published frame, as a render thread would, rather than the live layer.
+			using( TripleBufferedLease<float> pressure = atmosphere.Frames.AcquirePressure() ) {
+				for( int row = 0; row < AsciiGridSource.Height; row++ ) {
+					for( int column = 0; column < AsciiGridSource.Width; column++ ) {
+						_values[column, row] = pressure.TryGet( column, row, out float value ) ? value : 0.0f;
+					}
 				}
 			}
 			_op.ScaleToRange( _values, _pixels );

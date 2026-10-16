@@ -1,3 +1,4 @@
+using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,6 +52,19 @@ public class AtmosphereBenchmarks {
 		// keeping the work per step comparable to the always-on airflow benchmark.
 		_atmosphere.AddGas( 50, 50, _gas, 1f );
 		_ = _atmosphere.Update( Step );
+	}
+
+	// What a render thread pays to read one published quantity.
+	[Benchmark]
+	public float ReadPressureFrame() {
+		float sum = 0.0f;
+		using TripleBufferedLease<float> pressure = _atmosphere.Frames.AcquirePressure();
+		foreach( GridChunk<float> chunk in pressure.EnumerateChunks() ) {
+			foreach( float value in chunk.Values ) {
+				sum += value;
+			}
+		}
+		return sum;
 	}
 
 	[GlobalCleanup]

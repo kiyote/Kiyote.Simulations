@@ -9,7 +9,7 @@ namespace Kiyote.Simulations.Visualizer.Topology.Advection;
 internal sealed class GridAdvectionVisualizer {
 
 	public const int Size = 100;
-	public const int ChunkSize = 16;
+	public const int ChunkSize = 32;
 	public const int TotalFrameCount = 100;
 
 	private readonly IGridAdvection _advection;
@@ -60,12 +60,12 @@ internal sealed class GridAdvectionVisualizer {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		using ICompiledGridAssembly<float> compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy, 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy );
 		AdvectionNeighbourhood neighbourhood = _advection.CreateNeighbourhood( compiled, connectivity );
-		IGridLayer<float> values = compiled.Bind<float, IdentityBinding>( default, 1 );
-		IGridLayer<float> scratch = compiled.CreateLayer<float>( 1 );
-		IGridLayer<float> velocityX = compiled.CreateLayer<float>( 0 );
-		IGridLayer<float> velocityY = compiled.CreateLayer<float>( 0 );
+		IGridLayer<float> values = compiled.Bind<float, IdentityBinding>( default );
+		IGridLayer<float> scratch = compiled.CreateLayer<float>();
+		IGridLayer<float> velocityX = compiled.CreateLayer<float>();
+		IGridLayer<float> velocityY = compiled.CreateLayer<float>();
 		// A uniform diagonal wind, matching the other advection visualizers.
 		for( int row = 0; row < Size; row++ ) {
 			for( int column = 0; column < Size; column++ ) {

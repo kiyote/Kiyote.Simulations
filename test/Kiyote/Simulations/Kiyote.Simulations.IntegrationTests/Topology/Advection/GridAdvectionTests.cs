@@ -4,8 +4,8 @@ using Kiyote.Simulations.Topology.Advection;
 
 namespace Kiyote.Simulations.Topology.Advection.IntegrationTests;
 
-[TestFixture( 8 )]
-[TestFixture( 16 )]
+[TestFixture( 32 )]
+[TestFixture( 64 )]
 [ExcludeFromCodeCoverage]
 public sealed class GridAdvectionTests {
 
@@ -75,7 +75,7 @@ public sealed class GridAdvectionTests {
 
 	[Test]
 	public void Update_AcrossChunkBoundary_CarriesValue() {
-		Cells cells = new Cells( 20, 20 );
+		Cells cells = new Cells( _chunkSize + 4, _chunkSize + 4 );
 		cells.FillVelocity( 2f * OneCell, OneCell );
 		cells.Value.GetCell( _chunkSize - 1, _chunkSize - 1 ) = 1000f;
 
@@ -131,6 +131,62 @@ public sealed class GridAdvectionTests {
 		Assert.That( right.Value.GetCell( 0, 5 ), Is.EqualTo( 1000f ).Within( 1e-4f ) );
 	}
 
+	[Test]
+	public void Update_SpanningChunks_MatchesSingleChunk() {
+		const int size = 40;
+		// Offset so the grid straddles the corner where four chunks meet.
+		int offset = _chunkSize - ( size / 2 );
+		Cells spanning = CreatePattern( size );
+		Cells single = CreatePattern( size );
+
+		Step( new Box( offset + 12, offset + 12, offset + 27, offset + 27 ), (spanning, offset, offset) );
+		Step( GridCompiler.MinimumChunkSize * 2, new Box( 12, 12, 27, 27 ), (single, 0, 0) );
+
+		using( Assert.EnterMultipleScope() ) {
+			for( int row = 0; row < size; row++ ) {
+				for( int column = 0; column < size; column++ ) {
+					if( single.Value.IsOccupied( column, row ) ) {
+						Assert.That( spanning.Value.GetCell( column, row ), Is.EqualTo( single.Value.GetCell( column, row ) ).Within( 1e-4f ), $"({column},{row})" );
+					}
+				}
+			}
+		}
+	}
+
+	[Test]
+	public void Update_DisplacementAcrossWholeChunk_CarriedFullDistance() {
+		Cells cells = new Cells( ( _chunkSize * 2 ) + 8, 4 );
+		cells.FillVelocity( ( _chunkSize + 2 ) * OneCell, 0f );
+		cells.Value.GetCell( 3, 1 ) = 1000f;
+
+		Step( new Open(), cells );
+
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( cells.Value.GetCell( _chunkSize + 5, 1 ), Is.EqualTo( 1000f ).Within( 1e-2f ) );
+			Assert.That( cells.Value.GetCell( 3, 1 ), Is.Zero );
+		}
+	}
+
+	// A deterministic, uneven field with a few holes (vacuum). The top half moves less than a
+	// cell per step (the vectorized path); the bottom half moves up to three cells (the walk).
+	private Cells CreatePattern(
+		int size
+	) {
+		Cells cells = new Cells( size, size );
+		for( int row = 0; row < size; row++ ) {
+			for( int column = 0; column < size; column++ ) {
+				float scale = row < size / 2 ? 0.4f : 1.5f;
+				cells.Value.GetCell( column, row ) = ( ( column * 37 ) + ( row * 53 ) ) % 101;
+				cells.X.GetCell( column, row ) = ( ( ( ( column * 7 ) + ( row * 3 ) ) % 5 ) - 2 ) * scale * OneCell;
+				cells.Y.GetCell( column, row ) = ( ( ( ( column * 3 ) + ( row * 11 ) ) % 5 ) - 2 ) * scale * OneCell;
+			}
+		}
+		cells.Clear( 19, 5 );
+		cells.Clear( 20, 20 );
+		cells.Clear( 33, 19 );
+		return cells;
+	}
+
 	private void Step<TStrategy>(
 		TStrategy strategy,
 		Cells cells
@@ -142,23 +198,32 @@ public sealed class GridAdvectionTests {
 		TStrategy strategy,
 		params (Cells Cells, int Column, int Row)[] placements
 	) where TStrategy : struct, IConnectivityStrategy<float> {
-		using ICompiledGridAssembly<float> value = Compile( placements, p => p.Value );
-		using ICompiledGridAssembly<float> x = Compile( placements, p => p.X );
-		using ICompiledGridAssembly<float> y = Compile( placements, p => p.Y );
+		Step( _chunkSize, strategy, placements );
+	}
 
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( value, strategy, 0 );
+	private void Step<TStrategy>(
+		int chunkSize,
+		TStrategy strategy,
+		params (Cells Cells, int Column, int Row)[] placements
+	) where TStrategy : struct, IConnectivityStrategy<float> {
+		using ICompiledGridAssembly<float> value = Compile( chunkSize, placements, p => p.Value );
+		using ICompiledGridAssembly<float> x = Compile( chunkSize, placements, p => p.X );
+		using ICompiledGridAssembly<float> y = Compile( chunkSize, placements, p => p.Y );
+
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( value, strategy );
 		AdvectionNeighbourhood neighbourhood = _advection.CreateNeighbourhood( value, connectivity );
-		IGridLayer<float> source = value.Bind<float, Identity>( default, 1 );
-		IGridLayer<float> destination = value.CreateLayer<float>( 1 );
-		IGridLayer<float> vx = x.Bind<float, Identity>( default, 0 );
-		IGridLayer<float> vy = y.Bind<float, Identity>( default, 0 );
+		IGridLayer<float> source = value.Bind<float, Identity>( default );
+		IGridLayer<float> destination = value.CreateLayer<float>();
+		IGridLayer<float> vx = x.Bind<float, Identity>( default );
+		IGridLayer<float> vy = y.Bind<float, Identity>( default );
 
 		_advection.Update( neighbourhood, vx, vy, source, destination );
 		value.Swap( source, destination );
 		value.Commit();
 	}
 
-	private ICompiledGridAssembly<float> Compile(
+	private static ICompiledGridAssembly<float> Compile(
+		int chunkSize,
 		(Cells Cells, int Column, int Row)[] placements,
 		Func<Cells, DenseGridSource<float>> select
 	) {
@@ -166,7 +231,7 @@ public sealed class GridAdvectionTests {
 		foreach( (Cells cells, int column, int row) in placements ) {
 			Assert.That( assembly.TryAttach( select( cells ), column, row ).Succeeded, Is.True );
 		}
-		return new GridCompiler().Compile( assembly, _chunkSize );
+		return new GridCompiler().Compile( assembly, chunkSize );
 	}
 
 	private sealed class Cells {
@@ -194,6 +259,15 @@ public sealed class GridAdvectionTests {
 					Y.GetCell( column, row ) = y;
 				}
 			}
+		}
+
+		public void Clear(
+			int column,
+			int row
+		) {
+			Value.TryClearCell( column, row );
+			X.TryClearCell( column, row );
+			Y.TryClearCell( column, row );
 		}
 
 		private static DenseGridSource<float> Create(

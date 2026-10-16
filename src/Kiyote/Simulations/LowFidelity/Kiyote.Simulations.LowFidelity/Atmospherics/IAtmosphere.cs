@@ -3,7 +3,8 @@ using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 
-// Layers are exposed for reading.  Change gas, heat and condensate through the methods.
+// Layers are exposed for reading on the simulation thread.  Change gas, heat and condensate
+// through the methods.  Another thread must only read the atmosphere through Frames.
 public interface IAtmosphere : IDisposable {
 
 	IGasRegistry Gases { get; }
@@ -23,6 +24,10 @@ public interface IAtmosphere : IDisposable {
 	// Total gas lost to space during the last Update.
 	float Vented { get; }
 
+	// Copies of the layers published at the end of every Update, safe to read from one other
+	// thread while this thread calls Update.
+	IAtmosphereFrames Frames { get; }
+
 	IGridLayer<float> GetGas(
 		GasIndex gas
 	);
@@ -40,15 +45,6 @@ public interface IAtmosphere : IDisposable {
 	// Returns the number of fixed steps run.
 	int Update(
 		TimeSpan elapsed
-	);
-
-	// Safe to call from one reader thread while another thread calls Update.
-	// Returns the most recently published frame, which the simulation will not touch until
-	// a later AcquireFrame swaps it out.  Only one frame may be held at a time.
-	IAtmosphereFrame AcquireFrame();
-
-	void ReleaseFrame(
-		IAtmosphereFrame frame
 	);
 
 	// Copies values back into the cells.

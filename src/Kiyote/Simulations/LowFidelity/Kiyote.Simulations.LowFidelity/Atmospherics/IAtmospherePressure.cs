@@ -1,25 +1,21 @@
-using Kiyote.Geometry.Topology;
-
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 
+// All spans are chunk spans (see AtmosphereSimd).
 internal interface IAtmospherePressure {
 
-	// Sums gas into total, then derives pressure from total and temperature.
-	void Compute(
-		int slot,
-		ReadOnlySpan<ulong> mask,
-		IGridLayer<float>[] gas,
-		IGridLayer<float> temperature,
-		IGridLayer<float> total,
-		IGridLayer<float> pressure
+	// Adds one gas's amounts into total for every present cell.
+	void Accumulate(
+		ReadOnlySpan<ulong> presence,
+		ReadOnlySpan<float> gas,
+		Span<float> total
 	);
 
-	// Writes the sum of all gas layers into target for every valid cell of the slot.
-	void SumGas(
-		int slot,
-		ReadOnlySpan<ulong> mask,
-		IGridLayer<float>[] gas,
-		IGridLayer<float> target
+	// Derives pressure = total * temperature / ReferenceTemperature for every present cell.
+	void Compute(
+		ReadOnlySpan<ulong> presence,
+		ReadOnlySpan<float> total,
+		ReadOnlySpan<float> temperature,
+		Span<float> pressure
 	);
 
 }

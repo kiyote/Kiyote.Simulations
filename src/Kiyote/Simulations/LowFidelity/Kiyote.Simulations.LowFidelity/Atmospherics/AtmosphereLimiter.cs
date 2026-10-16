@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using Kiyote.Geometry.Topology;
 using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
@@ -9,21 +8,14 @@ namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 internal sealed class AtmosphereLimiter : IAtmosphereLimiter {
 
 	void IAtmosphereLimiter.ComputeScale(
-		int slot,
-		ReadOnlySpan<ulong> mask,
+		ReadOnlySpan<ulong> presence,
 		float dt,
-		IGridLayer<float> totalLayer,
-		IGridLayer<float> flowEastLayer,
-		IGridLayer<float> flowSouthLayer,
-		IGridLayer<float> ventLayer,
-		IGridLayer<float> scaleLayer
+		ReadOnlySpan<float> total,
+		ReadOnlySpan<float> flowEast,
+		ReadOnlySpan<float> flowSouth,
+		ReadOnlySpan<float> vent,
+		Span<float> scale
 	) {
-		int stride = flowEastLayer.Stride;
-		Span<float> total = totalLayer.Cells;
-		Span<float> flowEast = flowEastLayer.Cells;
-		Span<float> flowSouth = flowSouthLayer.Cells;
-		Span<float> vent = ventLayer.Cells;
-		Span<float> scale = scaleLayer.Cells;
 		ref float totalRef = ref MemoryMarshal.GetReference( total );
 		ref float eastRef = ref MemoryMarshal.GetReference( flowEast );
 		ref float southRef = ref MemoryMarshal.GetReference( flowSouth );
@@ -32,17 +24,20 @@ internal sealed class AtmosphereLimiter : IAtmosphereLimiter {
 		Vector256<float> dtV = Vector256.Create( dt );
 
 		for( int row = 0; row < ChunkSize; row++ ) {
-			uint bits = GetRowMask( mask, row );
+			uint bits = GetRowMask( presence, row );
 			if( bits == 0 ) {
 				continue;
 			}
-			int start = scaleLayer.IndexOf( slot, 0, row );
+			int start = ChunkIndex( 0, row );
+			int paddedStart = PaddedIndex( 0, row );
 			if( bits == FullRow ) {
-				for( int i = start; i < start + ChunkSize; i += Lanes ) {
-					Vector256<float> outflow = Vector256.Max( Load( ref eastRef, i ), Vector256<float>.Zero )
-						+ Vector256.Max( Load( ref southRef, i ), Vector256<float>.Zero )
-						+ Vector256.Max( -Load( ref eastRef, i - 1 ), Vector256<float>.Zero )
-						+ Vector256.Max( -Load( ref southRef, i - stride ), Vector256<float>.Zero )
+				for( int c = 0; c < ChunkSize; c += Lanes ) {
+					int i = start + c;
+					int p = paddedStart + c;
+					Vector256<float> outflow = Vector256.Max( Load( ref eastRef, p ), Vector256<float>.Zero )
+						+ Vector256.Max( Load( ref southRef, p ), Vector256<float>.Zero )
+						+ Vector256.Max( -Load( ref eastRef, p - 1 ), Vector256<float>.Zero )
+						+ Vector256.Max( -Load( ref southRef, p - PaddedStride ), Vector256<float>.Zero )
 						+ Load( ref ventRef, i );
 					outflow *= dtV;
 					Vector256<float> t = Load( ref totalRef, i );
@@ -51,12 +46,14 @@ internal sealed class AtmosphereLimiter : IAtmosphereLimiter {
 				continue;
 			}
 			while( bits != 0 ) {
-				int i = start + BitOperations.TrailingZeroCount( bits );
+				int column = BitOperations.TrailingZeroCount( bits );
 				bits &= bits - 1;
-				float outflow = MathF.Max( flowEast[i], 0.0f )
-					+ MathF.Max( flowSouth[i], 0.0f )
-					+ MathF.Max( -flowEast[i - 1], 0.0f )
-					+ MathF.Max( -flowSouth[i - stride], 0.0f )
+				int i = start + column;
+				int p = paddedStart + column;
+				float outflow = MathF.Max( flowEast[p], 0.0f )
+					+ MathF.Max( flowSouth[p], 0.0f )
+					+ MathF.Max( -flowEast[p - 1], 0.0f )
+					+ MathF.Max( -flowSouth[p - PaddedStride], 0.0f )
 					+ vent[i];
 				outflow *= dt;
 				scale[i] = outflow > total[i] ? total[i] / outflow : 1.0f;
@@ -65,46 +62,45 @@ internal sealed class AtmosphereLimiter : IAtmosphereLimiter {
 	}
 
 	void IAtmosphereLimiter.Limit(
-		int slot,
-		ReadOnlySpan<ulong> mask,
-		IGridLayer<float> flowEastLayer,
-		IGridLayer<float> flowSouthLayer,
-		IGridLayer<float> ventLayer,
-		IGridLayer<float> scaleLayer
+		ReadOnlySpan<ulong> presence,
+		Span<float> flowEast,
+		Span<float> flowSouth,
+		Span<float> vent,
+		ReadOnlySpan<float> scale
 	) {
-		int stride = flowEastLayer.Stride;
-		Span<float> flowEast = flowEastLayer.Cells;
-		Span<float> flowSouth = flowSouthLayer.Cells;
-		Span<float> vent = ventLayer.Cells;
-		Span<float> scale = scaleLayer.Cells;
 		ref float eastRef = ref MemoryMarshal.GetReference( flowEast );
 		ref float southRef = ref MemoryMarshal.GetReference( flowSouth );
 		ref float ventRef = ref MemoryMarshal.GetReference( vent );
 		ref float scaleRef = ref MemoryMarshal.GetReference( scale );
 
 		for( int row = 0; row < ChunkSize; row++ ) {
-			uint bits = GetRowMask( mask, row );
+			uint bits = GetRowMask( presence, row );
 			if( bits == 0 ) {
 				continue;
 			}
-			int start = scaleLayer.IndexOf( slot, 0, row );
+			int start = ChunkIndex( 0, row );
+			int paddedStart = PaddedIndex( 0, row );
 			if( bits == FullRow ) {
-				for( int i = start; i < start + ChunkSize; i += Lanes ) {
-					Vector256<float> s = Load( ref scaleRef, i );
+				for( int c = 0; c < ChunkSize; c += Lanes ) {
+					int i = start + c;
+					int p = paddedStart + c;
+					Vector256<float> s = Load( ref scaleRef, p );
 					Vector256<float> east = Load( ref eastRef, i );
 					Vector256<float> south = Load( ref southRef, i );
-					Store( east * Vector256.ConditionalSelect( Vector256.GreaterThan( east, Vector256<float>.Zero ), s, Load( ref scaleRef, i + 1 ) ), ref eastRef, i );
-					Store( south * Vector256.ConditionalSelect( Vector256.GreaterThan( south, Vector256<float>.Zero ), s, Load( ref scaleRef, i + stride ) ), ref southRef, i );
+					Store( east * Vector256.ConditionalSelect( Vector256.GreaterThan( east, Vector256<float>.Zero ), s, Load( ref scaleRef, p + 1 ) ), ref eastRef, i );
+					Store( south * Vector256.ConditionalSelect( Vector256.GreaterThan( south, Vector256<float>.Zero ), s, Load( ref scaleRef, p + PaddedStride ) ), ref southRef, i );
 					Store( Load( ref ventRef, i ) * s, ref ventRef, i );
 				}
 				continue;
 			}
 			while( bits != 0 ) {
-				int i = start + BitOperations.TrailingZeroCount( bits );
+				int column = BitOperations.TrailingZeroCount( bits );
 				bits &= bits - 1;
-				flowEast[i] *= flowEast[i] > 0.0f ? scale[i] : scale[i + 1];
-				flowSouth[i] *= flowSouth[i] > 0.0f ? scale[i] : scale[i + stride];
-				vent[i] *= scale[i];
+				int i = start + column;
+				int p = paddedStart + column;
+				flowEast[i] *= flowEast[i] > 0.0f ? scale[p] : scale[p + 1];
+				flowSouth[i] *= flowSouth[i] > 0.0f ? scale[p] : scale[p + PaddedStride];
+				vent[i] *= scale[p];
 			}
 		}
 	}

@@ -9,7 +9,7 @@ namespace Kiyote.Simulations.Visualizer.Topology.Pressure;
 internal sealed class GridPressureVisualizer {
 
 	public const int Size = 100;
-	public const int ChunkSize = 16;
+	public const int ChunkSize = 32;
 	public const int TotalFrameCount = 100;
 
 	private readonly IGridPressure _pressure;
@@ -61,10 +61,10 @@ internal sealed class GridPressureVisualizer {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 		using ICompiledGridAssembly<float> compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy, 0 );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, connectivityStrategy );
 		IGridLayer<Direction> neighbourhood = _pressure.CreateNeighbourhood( compiled, connectivity );
-		IGridLayer<float> values = compiled.Bind<float, IdentityBinding>( default, 1 );
-		IGridLayer<float> scratch = compiled.CreateLayer<float>( 1 );
+		IGridLayer<float> values = compiled.Bind<float, IdentityBinding>( default );
+		IGridLayer<float> scratch = compiled.CreateLayer<float>();
 
 		using IAnimationBuilder builder = _animation.StartAnimation( fileName, TimeSpan.FromMilliseconds( 100 ) );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {

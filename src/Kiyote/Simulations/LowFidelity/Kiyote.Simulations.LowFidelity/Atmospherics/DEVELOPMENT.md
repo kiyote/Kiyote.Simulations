@@ -97,84 +97,72 @@ Diagonals are skipped: they double the cost and pipes already spread isotropical
 
 ## Implementation notes
 
-- **Layout:** one `IGridLayer<float>` per gas (structure of arrays), 16×16 chunks with a 1-cell halo. Halos are exchanged once per pass.
-transfer (gas-major, into `_gasNext`/`_temperatureNext`, with temperature mixing, conduction and phase change) → copy back.
-- **Idle chunks are skipped.** A chunk is active when something in it or next to it can change; caller edits and topology changes wake it.
-- **Vectorization:** full rows (all 16 cells valid) are processed 8 cells at a time with `Vector256`; partial rows (next to walls or edges) use a scalar loop over the validity mask. Both paths must produce identical results.
-- **Publish:** pressure and wind are recomputed only for chunks touched since the last publish, once per `Update`.
-- **Allocation:** steady-state stepping and publishing allocate nothing.
+- **Layout:** the compiled assembly's `ChunkedGridLayout` (Kiyote.Buffers) with 32×32 chunks, the smallest size `GridCompiler` accepts and a whole number of `Vector256` lanes for byte-sized layers (`Direction`, `bool`). Each quantity is one `IGridLayer<T>` whose `Values` is a `ChunkedGridLayer<T>` over that layout (structure of arrays). A chunk index and local index identify the same cell in every layer.
+- **Stages are span kernels.** Each stage (`IAtmospherePressure`, `IAtmosphereAcceleration`, `IAtmosphereLimiter`, `IAtmosphereTransport`, `IAtmosphereThermal`, `IAtmosphereCondensation`, `IAtmosphereWind`) works on one chunk and takes only spans:
+  - *chunk spans* (`ChunkSize²`, row-major) from `ChunkedGridLayer<T>.GetValues( chunk )` for the cell's own values;
+  - *padded spans* (`( ChunkSize + 2 )²`) for anything read at a neighbour. `Atmosphere` fills them with `GridChunkNeighbourhood<T>.CopyPadded( 1, ... )`, which writes 0 where the neighbouring chunk does not exist. `AtmosphereSimd.ChunkIndex` / `PaddedIndex` map a local cell to each shape.
+  Only the orchestrator knows about layers and chunks, so stages are unit tested with plain arrays.
+- **Step order:** sum gas and derive pressure → accelerate flows → compute limiter scale → limit → prepare and transport each gas (into `_gasNext`), mix temperature (into `_temperatureNext`), condense → copy back. Every phase finishes for all working chunks before the next starts, so border reads always see the neighbouring chunk's values from the same phase.
+- **Idle chunks are skipped.** A chunk is active when something in it or next to it can change; caller edits and topology changes wake it. Because only the work set is advanced, `_gasNext`/`_temperatureNext` are copied back per chunk rather than swapped.
+- **Vectorization:** full rows (all 32 cells present) are processed 8 cells at a time with `Vector256`; partial rows (next to walls or edges) use a scalar loop over the presence bits. Both paths must produce identical results.
+- **Publish:** pressure and wind are recomputed only for chunks touched since the last publish, once per `Update`, then every published quantity is copied into its frame (see below).
+- **Allocation:** steady-state stepping and publishing allocate nothing; scratch spans are owned by the atmosphere instance.
 
 ## Reading the simulation from a rendering thread
 
 The simulation runs on one thread (the *simulation thread*), which calls `Update`, `AddGas`, `RemoveGas` and the other mutating methods.
-A second thread (the *render thread*) can safely visualize the simulation at the same time by reading **frames**.
+A second thread (the *render thread*) can safely visualize the simulation at the same time by reading **frames** through `IAtmosphere.Frames`.
 
 ### The rule
 
 The render thread must **never** touch the live layers on `IAtmosphere` (`Pressure`, `Temperature`, `WindX`, `WindY`, `GetGas`, `GetCondensate`, `GetWind`, ...).
-The simulation thread rewrites those layers while it advances. The render thread may only use:
-
-- `IAtmosphere.AcquireFrame()`
-- `IAtmosphere.ReleaseFrame( frame )`
-- the members of the `IAtmosphereFrame` it is holding
+The simulation thread rewrites those layers while it advances. The render thread may only use the `IAtmosphereFrames` returned by `IAtmosphere.Frames` and the leases it hands out.
 
 ### Usage
 
 ```csharp
 // Render thread
-IAtmosphereFrame frame = atmosphere.AcquireFrame();
-try {
-  ReadOnlySpan<float> pressure = frame.Pressure;
-  for( int row = 0; row < rows; row++ ) {
-    for( int column = 0; column < columns; column++ ) {
-      int index = frame.IndexOf( column, row );
-      if( index < 0 ) {
-        continue; // Off-grid / vacuum
+IAtmosphereFrames frames = atmosphere.Frames;
+using( TripleBufferedLease<float> pressure = frames.AcquirePressure() ) {
+  foreach( GridChunk<float> chunk in pressure.EnumerateChunks() ) {
+    for( int row = 0; row < chunk.Size; row++ ) {
+      Span<float> values = chunk.GetRowValues( row );
+      for( int column = 0; column < chunk.Size; column++ ) {
+        if( chunk.IsPopulated( column, row ) ) {
+          Draw( chunk.Column + column, chunk.Row + row, values[column] );
+        }
       }
-      Draw( column, row, pressure[index] );
     }
   }
-} finally {
-  atmosphere.ReleaseFrame( frame );
 }
+// or, for single cells: pressure.TryGet( column, row, out float value )
 ```
 
-### What a frame contains
+### What the frames contain
 
-An `IAtmosphereFrame` is a read-only copy of the simulation as of the end of an `Update` call:
+Each published quantity is its own `TripleBufferedChunkedGrid<float>` (Kiyote.Buffers) with the same chunk size and populated cells as the simulation:
 
 | Member | Meaning |
 |---|---|
-| `StepCount` | Total fixed steps run when the frame was captured. Use it to detect whether the frame is new. |
-| `Vented` | Gas lost to space during the `Update` that produced the frame. |
+| `StepCount` | Total fixed steps run when the most recent frames were published. |
+| `Vented` | Gas lost to space during the `Update` that published the most recent frames. |
 | `Gases` | The gas registry, for names and indices. |
-| `Pressure`, `Temperature`, `WindX`, `WindY` | Per-cell values. |
-| `GetGas( gas )` | Per-cell amount of a gas. |
-| `GetCondensate( gas )` | Per-cell condensate; throws `ArgumentException` for gases that do not condense. |
-| `IndexOf( column, row )` | Index into any of the spans above, or `-1` for cells outside the grid. |
+| `AcquirePressure`, `AcquireTemperature`, `AcquireWindX`, `AcquireWindY` | Lease the latest published values. |
+| `AcquireGas( gas )` | Lease the latest published amount of a gas. |
+| `AcquireCondensate( gas )` | Lease the latest published condensate; throws `ArgumentException` for gases that do not condense. |
 
-The spans are the raw chunked storage, including halo cells, so they are **not** row-major. Always index them with `IndexOf`. Every span in a frame uses the same indexing.
+Unoccupied cells are not populated in a lease, so `TryGet` returns `false` for them.
 
 ### How it works
 
-The atmosphere keeps three frames in a lock-free triple buffer:
-
-- **back**: owned by the simulation thread. At the end of every `Update` the simulation copies its layers into this frame, then publishes it with `Interlocked.Exchange` into the shared slot (marked *fresh*) and takes the frame that was there as its new back frame.
-- **shared**: the most recently published frame not yet taken by the reader.
-- **front**: owned by the render thread. `AcquireFrame` swaps the front frame for the shared one (with `Interlocked.Exchange`) only when the shared frame is fresh; otherwise it hands back the same front frame again.
-
-Consequences:
-
-- Neither thread ever blocks or waits on the other.
-- While the render thread holds a frame, the simulation never writes to it, so the data is stable for as long as it is held.
-- If the simulation advances several times between acquisitions, the reader sees only the latest frame; intermediate frames are skipped.
-- If the simulation has not advanced, `AcquireFrame` returns the same frame (same `StepCount`) as last time.
-- Copies reuse their arrays, so publishing allocates nothing in the steady state. The copy happens once per `Update`, not once per fixed step.
+- At the end of every `Update` the simulation copies each quantity into the buffer of its triple-buffered grid that is neither the latest nor leased, then calls `Swap` to publish it. `Swap` and `Acquire` are lock-free, so neither thread ever blocks or waits on the other.
+- While a lease is held the simulation never writes its buffer, so the data is stable until the lease is disposed.
+- If the simulation advances several times between acquisitions, the reader sees only the latest values; intermediate frames are skipped.
+- When the populated cells change (cells added or removed, or a recompile) the simulation publishes into a new set of grids and swaps the set in atomically. Leases on the previous grids stay valid until disposed, so topology changes need no external synchronization.
 
 ### Constraints
 
-- **Single reader.** Only one thread may call `AcquireFrame`/`ReleaseFrame`.
-- **One frame at a time.** Calling `AcquireFrame` while a frame is held throws `InvalidOperationException`. So does calling `ReleaseFrame` when nothing is held.
-- **Do not keep references after release.** Once released, a frame may be overwritten by the simulation at any time. Copy any values you need beyond the release.
-- **Read-only.** Frames must never be modified.
-- **Topology and size changes are externally synchronized.** When the grid's content or size changes, the atmosphere recompiles and creates new frames. The caller must make sure the render thread is not holding a frame (and is not inside `AcquireFrame`/`ReleaseFrame`) while that happens. The atmosphere does not guard against it.
+- **Single reader.** Only one thread may acquire leases.
+- **One lease per quantity.** Dispose a lease before acquiring the same quantity again. Leases of different quantities can be held together.
+- **Not coherent across quantities.** Each quantity is leased independently, so two leases may come from different `Update`s. Acquire everything you need back-to-back and compare `StepCount` before and after if exact coherence matters.
+- **Read-only.** Leased buffers must never be modified, and a lease must not be used after it is disposed.
