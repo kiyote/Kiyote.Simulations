@@ -22,6 +22,7 @@ public static class Program {
 				typeof( Atmospherics.AtmosphereBenchmarks ),
 				typeof( Thermals.ThermalBenchmarks ),
 				typeof( AtmosphericThermals.AtmosphericThermalsBenchmarks ),
+				typeof( AtmosphericThermals.ConvectionTopologyBenchmarks ),
 			] )
 			.Run( args, config );
 	}

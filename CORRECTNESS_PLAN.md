@@ -216,7 +216,73 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   figures honestly: confirmation reports zero for one tick and 62 B/invocation
   for eight (3,984 total measured bytes over 64 invocations), despite the exact
   warmed-update gates measuring zero.
-- W4-W8 optional performance experiments have not started. W4 is next; retain
+- W4: completed and retained after the D6/D7 gates. Convection-link rebuilding
+  traverses allocated chunks and ascending local presence bits; metadata spans
+  are acquired once per current/cardinal-neighbour chunk for each source chunk.
+  Descriptors contain chunk/local addresses, with floor then N/E/S/W membership.
+  Empty chunks, holes, diagonals and permeable neighbours do not become wall
+  faces. In-place exchange deliberately follows compiled traversal, not a global
+  world-coordinate sort or an attachment-order-independent result.
+- W4 exchange uses narrow internal chunk-addressed state interfaces. Public and
+  internal energy inputs share application cores, including floors, actual gas
+  energy applied, capacity guards and dirty/wake/publication bookkeeping. Current
+  gas layers are summed once per gas cell after transport/condensation; exchange
+  changes no mass, so that capacity can be reused across its faces. Temperature
+  spans are acquired inside each exchange after thermal swaps, never stored in
+  descriptors. Temporary metadata still uses scoped ownership and retryable
+  invalidation. No public API or upstream dependency change was needed.
+- W4 validation: 24 new integration cases; all 389 tests pass in Debug and Release
+  with zero build warnings/errors. New coverage includes exact floor/cardinal
+  membership and ordering across positive/negative chunk seams, all four signed
+  coordinate corners, distant placements, empty allocated chunks, shared walls,
+  permeable neighbours, compiled traversal order, repeated temperature swaps,
+  fresh mass after transport, the gas temperature floor, commit after clearing
+  dirty flags immediately before convection, final temperature publication, and
+  exact zero-allocation warmed sparse updates. Existing ownership, metadata
+  failure/retry, material invalidation, coupled timing and allocation tests pass.
+- W4 measurements: matched A1 -> B1 -> B2 -> A2 runs of all ten LowFidelity
+  benchmark cases, using identical benchmark code, published dependencies,
+  MediumRun/InProcessNoEmit configuration, host and runtime. A1/A2 ran a preserved
+  copy of the baseline Release binaries; B1/B2 ran the candidate. No other build,
+  test or benchmark ran concurrently. Reports remain in
+  `BenchmarkDotNet.Artifacts/correctness-w4-{A1,B1,B2,A2}`.
+  The existing dense 100x100 workload and its injection/tick/exchange assertions
+  are unchanged. The new workload uses four sealed 16x16 rooms, spaced 16 cells
+  apart when dense (32x32 total bounds) or 768 apart when sparse (784x784 bounds).
+  `Update` advances one real tick/exchange with ongoing gas/heat input.
+  `RebuildTopology` invalidates fully and updates with zero elapsed time: it
+  measures both children's metadata/solar preparation plus convection links,
+  not an isolated link-builder microbenchmark or skipped physics work.
+
+  | Workload (all times us) | A1 | A2 | B1 | B2 | Mean time reduction |
+  |------------------------|---:|---:|---:|---:|--------------------:|
+  | Atmosphere.Update | 287.92 | 276.40 | 257.75 | 253.55 | 9.4% |
+  | ReadPressureFrame | 16.09 | 16.05 | 15.18 | 15.47 | 4.6% |
+  | Thermal.Update | 203.1 | 205.7 | 198.7 | 200.6 | 2.3% |
+  | Thermal.UpdateWithMovingSun | 239.8 | 230.9 | 235.6 | 228.4 | 1.4% |
+  | Coupled 100x100, one tick | 1228.0 | 1212.0 | 773.3 | 788.3 | 36.0% |
+  | Coupled 100x100, eight ticks | 9202.0 | 9384.0 | 5849.4 | 6453.5 | 33.8% |
+  | Four dense rooms, update | 105.6 | 105.3 | 65.40 | 63.46 | 38.9% |
+  | Four dense rooms, rebuild | 183.9 | 186.5 | 125.53 | 122.62 | 33.0% |
+  | Four sparse rooms, update | 189.9 | 184.1 | 147.82 | 147.67 | 21.0% |
+  | Four sparse rooms, rebuild | 4943.6 | 4282.5 | 875.50 | 872.31 | 81.1% |
+
+  Reductions compare the arithmetic mean of the two candidate run means with the
+  arithmetic mean of the two baseline run means; they are not pooled statistical
+  estimates. Both candidate runs clear 10% on repeated exchanges and sparse
+  rebuilds, even against the faster baseline run. No representative workload
+  has a confirmed slowdown, let alone one exceeding 10%. Standalone controls are
+  not claimed as attributable W4 speedups. `BENCHMARK.md` records B2 statistics;
+  unchanged core-kernel measurements are retained.
+- W4 allocation gates: all coupled benchmark setups warm 100 invocations and
+  require exactly zero current-thread bytes over another 100, including the
+  actual dense 100x100 one/eight-tick cases and both four-room layouts. All four
+  runs pass. B2's separate in-process BenchmarkDotNet figures remain reported
+  honestly: 6 B/45 B for dense one/eight ticks and 1 B for each four-room update.
+  Full rebuilds intentionally allocate (127985 B dense, 217876 B sparse); these
+  are outside unchanged-topology steady state. No new steady-state allocation
+  was measured.
+- W5-W8 optional performance experiments have not started. W5 is next; retain
   each candidate only if matched, repeated measurements meet D6/D7.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation

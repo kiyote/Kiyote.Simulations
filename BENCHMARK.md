@@ -32,19 +32,28 @@
 
 | Method            | Mean      | Error    | StdDev   | Allocated |
 |-------------------|----------:|---------:|---------:|----------:|
-| Update            | 249.14 us | 9.515 us | 8.900 us |         - |
-| ReadPressureFrame |  15.19 us | 0.418 us | 0.391 us |         - |
+| Update            | 253.55 us | 11.992 us | 11.217 us |         - |
+| ReadPressureFrame |  15.47 us |  0.272 us |  0.254 us |         - |
 
 ## LowFidelity.Thermal
 
 | Method              | Mean     | Error   | StdDev  | Allocated |
 |---------------------|---------:|--------:|--------:|----------:|
-| Update              | 199.7 us | 8.13 us | 7.21 us |       1 B |
-| UpdateWithMovingSun | 234.9 us | 5.90 us | 5.52 us |       1 B |
+| Update              | 200.6 us | 10.41 us | 9.23 us |       1 B |
+| UpdateWithMovingSun | 228.4 us |  8.55 us | 7.99 us |       1 B |
 
 ## LowFidelity.AtmosphericThermals
 
-| Method | TicksPerUpdate | Mean     | Error     | StdDev    | Allocated |
-|--------|---------------:|---------:|----------:|----------:|----------:|
-| Update |              1 | 1.180 ms | 0.0543 ms | 0.0482 ms |         - |
-| Update |              8 | 9.511 ms | 0.2705 ms | 0.2530 ms |      62 B |
+| Method | TicksPerUpdate | Mean       | Error     | StdDev    | Allocated |
+|--------|---------------:|-----------:|----------:|----------:|----------:|
+| Update |              1 |   788.3 us |  25.95 us |  24.28 us |       6 B |
+| Update |              8 | 6,453.5 us | 168.96 us | 158.04 us |      45 B |
+
+## LowFidelity.ConvectionTopologyBenchmarks
+
+| Method          | Sparse | Mean      | Error     | StdDev    | Allocated |
+|-----------------|--------|----------:|----------:|----------:|----------:|
+| Update          | False  |  63.46 us |  0.678 us |  0.601 us |       1 B |
+| RebuildTopology | False  | 122.62 us |  3.173 us |  2.968 us |  127985 B |
+| Update          | True   | 147.67 us |  4.233 us |  3.959 us |       1 B |
+| RebuildTopology | True   | 872.31 us | 20.559 us | 19.231 us |  217876 B |

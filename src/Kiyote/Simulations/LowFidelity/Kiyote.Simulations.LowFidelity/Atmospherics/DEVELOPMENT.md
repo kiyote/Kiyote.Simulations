@@ -19,7 +19,7 @@ Simulate the atmosphere inside a spaceship well enough to *look and feel* right,
 - Pump, filter and heater behaviour. The simulation only exposes "add/remove gas or energy at a cell".
 - Deciding that a wall fails and changing the topology. The caller reads `Pressure`, changes the cells, then calls `InvalidateTopology`.
 - Moving objects in the wind; the simulation only reports wind.
-- Heat exchange with anything other than air (objects, walls, the hull). A separate system reads `Temperature`/`GetTotalGas` and applies `AddEnergy`.
+- Heat exchange with anything other than air (objects, walls, the hull). External systems can use `Temperature`/`GetTotalGas` and `AddEnergy`; the combined coordinator uses internal chunk-addressed convection state.
 - Combustion, reactions, latent heat, pressure-dependent boiling points, and accurate fluid dynamics.
 
 ## Model
@@ -105,6 +105,12 @@ and structure before any due convection; derived state and frames are finalized
 once after all ticks/exchanges. Diagnostics reset once per combined update, not
 per internal tick. Preparation completes before consuming time, including when
 elapsed time is zero. No intermediate frame is published before convection.
+
+The internal convection path shares energy-application semantics with public
+`AddEnergy`, including the actual applied result and dirty/wake/publication flags.
+It sums current gas layers after transport/condensation, not the earlier `_total`
+scratch. Capacities and addresses are valid for the prepared shared compilation;
+temperature spans are reacquired on each exchange after thermal storage swaps.
 
 ## Implementation notes
 

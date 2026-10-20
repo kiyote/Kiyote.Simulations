@@ -1,3 +1,4 @@
+using System.Numerics;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
@@ -10,7 +11,10 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	where TAtmosphereStrategy : struct, IAtmosphereCellStrategy<TCell>
 	where TThermalStrategy : struct, IThermalCellStrategy<TCell> {
 
-	private static readonly (int Column, int Row)[] Faces = [( 0, -1 ), ( 1, 0 ), ( 0, 1 ), ( -1, 0 )];
+	private static readonly int NorthNeighbour = Direction.North.ToNeighbourIndex();
+	private static readonly int EastNeighbour = Direction.East.ToNeighbourIndex();
+	private static readonly int SouthNeighbour = Direction.South.ToNeighbourIndex();
+	private static readonly int WestNeighbour = Direction.West.ToNeighbourIndex();
 
 	private readonly ICompiledGridAssembly<TCell> _compiled;
 	private readonly TAtmosphereStrategy _atmosphereStrategy;
@@ -170,7 +174,8 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	}
 
 	// Pairs every gas cell (occupied and permeable) with its own floor and each adjacent wall
-	// (occupied and impermeable). Refresh after occupancy, permeability or material invalidation.
+	// (occupied and impermeable), in chunk/local presence order, then floor, N/E/S/W face order.
+	// Refresh after occupancy, permeability or material invalidation.
 	private void BuildLinks() {
 		using OwnedGridLayers<TCell> layers = new OwnedGridLayers<TCell>( _compiled, ChunkSize );
 		IGridLayer<bool> permeable = layers.Add( _compiled.Bind<bool, PermeabilityBinding<TCell, TAtmosphereStrategy>>( new PermeabilityBinding<TCell, TAtmosphereStrategy>( _atmosphereStrategy ) ) );
@@ -180,28 +185,70 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 
 		List<ConvectionCell> cells = [];
 		List<ConvectionLink> links = [];
-		if( layout.TryGetPopulatedBounds( out int left, out int top, out int width, out int height ) ) {
-			for( int row = top; row < top + height; row++ ) {
-				for( int column = left; column < left + width; column++ ) {
-					if( !layout.IsPopulated( column, row ) || !permeable[column, row] ) {
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			if( layout.GetPopulatedCount( chunk ) == 0 ) {
+				continue;
+			}
+			ReadOnlySpan<int> neighbours = layout.GetNeighbours( chunk );
+			LinkChunk centre = new LinkChunk( chunk, layout, permeable, conductance, capacity );
+			LinkChunk north = new LinkChunk( neighbours[NorthNeighbour], layout, permeable, conductance, capacity );
+			LinkChunk east = new LinkChunk( neighbours[EastNeighbour], layout, permeable, conductance, capacity );
+			LinkChunk south = new LinkChunk( neighbours[SouthNeighbour], layout, permeable, conductance, capacity );
+			LinkChunk west = new LinkChunk( neighbours[WestNeighbour], layout, permeable, conductance, capacity );
+			for( int row = 0; row < ChunkSize; row++ ) {
+				uint mask = GetRowMask( centre.Presence, row );
+				while( mask != 0 ) {
+					int column = BitOperations.TrailingZeroCount( mask );
+					mask &= mask - 1;
+					int local = ChunkIndex( column, row );
+					if( !centre.Permeable[local] ) {
 						continue;
 					}
 					int first = links.Count;
-					links.Add( new ConvectionLink( column, row, conductance[column, row], capacity[column, row] ) );
-					foreach( (int dc, int dr) in Faces ) {
-						int c = column + dc;
-						int r = row + dr;
-						if( layout.IsPopulated( c, r ) && !permeable[c, r] ) {
-							links.Add( new ConvectionLink( c, r, conductance[c, r], capacity[c, r] ) );
-						}
-					}
-					cells.Add( new ConvectionCell( column, row, first, links.Count - first ) );
+					links.Add( new ConvectionLink( chunk, local, centre.Conductance[local], centre.Capacity[local] ) );
+					AddWall( centre, north, row == 0, ( local - ChunkSize ) & ( ChunkArea - 1 ), links );
+					AddWall( centre, east, column == ChunkSize - 1, ChunkIndex( ( column + 1 ) & ( ChunkSize - 1 ), row ), links );
+					AddWall( centre, south, row == ChunkSize - 1, ( local + ChunkSize ) & ( ChunkArea - 1 ), links );
+					AddWall( centre, west, column == 0, ChunkIndex( ( column - 1 ) & ( ChunkSize - 1 ), row ), links );
+					cells.Add( new ConvectionCell( chunk, local, first, links.Count - first ) );
 				}
 			}
 		}
 		_cells = [.. cells];
 		_links = [.. links];
 		_topologyChanged = false;
+	}
+
+	private static void AddWall(
+		in LinkChunk centre,
+		in LinkChunk adjacent,
+		bool crossesChunk,
+		int local,
+		List<ConvectionLink> links
+	) {
+		ref readonly LinkChunk target = ref crossesChunk ? ref adjacent : ref centre;
+		if( target.Chunk < 0
+			|| ( GetRowMask( target.Presence, local / ChunkSize ) & ( 1u << ( local & ( ChunkSize - 1 ) ) ) ) == 0
+			|| target.Permeable[local] ) {
+			return;
+		}
+		links.Add( new ConvectionLink( target.Chunk, local, target.Conductance[local], target.Capacity[local] ) );
+	}
+
+	private readonly ref struct LinkChunk {
+		public int Chunk { get; }
+		public ReadOnlySpan<ulong> Presence { get; }
+		public ReadOnlySpan<bool> Permeable { get; }
+		public ReadOnlySpan<float> Conductance { get; }
+		public ReadOnlySpan<float> Capacity { get; }
+
+		public LinkChunk( int chunk, GridLayout layout, IGridLayer<bool> permeable, IGridLayer<float> conductance, IGridLayer<float> capacity ) {
+			Chunk = chunk;
+			Presence = chunk < 0 ? [] : layout.GetPresence( chunk );
+			Permeable = chunk < 0 ? [] : permeable.GetValues( chunk );
+			Conductance = chunk < 0 ? [] : conductance.GetValues( chunk );
+			Capacity = chunk < 0 ? [] : capacity.GetValues( chunk );
+		}
 	}
 
 }

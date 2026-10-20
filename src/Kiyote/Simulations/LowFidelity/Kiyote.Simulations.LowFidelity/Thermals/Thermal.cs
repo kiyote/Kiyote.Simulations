@@ -4,7 +4,7 @@ using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
 
 namespace Kiyote.Simulations.LowFidelity.Thermals;
 
-internal sealed class Thermal<TCell, TStrategy> : IThermal
+internal sealed class Thermal<TCell, TStrategy> : IThermal, IThermalConvectionState
 	where TStrategy : struct, IThermalCellStrategy<TCell> {
 
 	private readonly ICompiledGridAssembly<TCell> _compiled;
@@ -81,6 +81,10 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 
 	IGridLayer<float> IThermalState.Temperature => _temperature;
 
+	IGridLayer<float> IThermalConvectionState.Temperature => _temperature;
+
+	void IThermalConvectionState.AddEnergyAt( int chunk, int local, float capacity, float joules ) => ApplyEnergy( chunk, local, capacity, joules );
+
 	Vector IThermalState.SunDirection {
 		get => _sunDirection;
 		set {
@@ -119,7 +123,15 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		if( !_compiled.ChunkLayout.TryLocate( column, row, out int chunk, out int local ) ) {
 			return;
 		}
-		float capacity = _capacity.GetValues( chunk )[local];
+		ApplyEnergy( chunk, local, _capacity.GetValues( chunk )[local], joules );
+	}
+
+	private void ApplyEnergy(
+		int chunk,
+		int local,
+		float capacity,
+		float joules
+	) {
 		if( capacity <= 0.0f ) {
 			return;
 		}

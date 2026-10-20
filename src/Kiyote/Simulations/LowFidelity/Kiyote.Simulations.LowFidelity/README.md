@@ -65,6 +65,23 @@ and step caps. Public standalone factories and the combined factory use the same
 typed internal engine construction and configured stage services; combined stepping
 does not downcast public state views or call child elapsed-time updates.
 
+### Convection storage and traversal
+
+Convection descriptors use compiled chunk/local addresses, not world-coordinate
+lookups. Rebuilding visits allocated chunks and their occupied presence bits,
+skipping empty allocated chunks rather than scanning the occupied bounding
+rectangle. Cells follow compiled chunk traversal and ascending local index; each
+cell exchanges with its own floor first, then occupied impermeable cardinal
+neighbours in north/east/south/west order. Holes, diagonal neighbours and permeable
+neighbours are not wall faces. A shared wall can exchange with each adjacent gas
+cell. Exchange is in-place and order-dependent, not attachment-order independent.
+
+Each exchange reacquires temperature spans after the thermal step's storage swap
+and sums current gas layers after transport/condensation. It transfers only the
+energy actually applied to the gas, preserving temperature floors and the same
+dirty/wake/publication bookkeeping as public energy inputs. Descriptors hold no
+spans; relevant live topology/material edits still require explicit invalidation.
+
 ## Topology changes
 
 For live cell additions/removals and relevant permeability/material changes, call

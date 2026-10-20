@@ -437,6 +437,7 @@ internal sealed class CoupledSteppingTests {
 
 		public void Initialize() {
 			Simulation = Services.GetRequiredService<IGridAtmosphericThermals>().Create( Owner, new Strategy( this ), new Strategy( this ) );
+			Trace.Frames = Simulation.Atmosphere.Frames;
 			Trace.Clear();
 		}
 
@@ -456,6 +457,7 @@ internal sealed class CoupledSteppingTests {
 		public List<long> PublishedStepsDuringExchange { get; } = new List<long>( 4096 );
 		public List<int> StructureStepsDuringExchange { get; } = new List<int>( 4096 );
 		private int _structureSteps;
+		public IAtmosphereFrames Frames { get; set; }
 
 		public void Clear() {
 			Events.Clear();
@@ -473,9 +475,9 @@ internal sealed class CoupledSteppingTests {
 			_structureSteps++;
 			_conduction.Conduct( presence, dt, temperature, conductivity, capacity, temperatureNext );
 		}
-		public void Exchange( ReadOnlySpan<ConvectionCell> cells, ReadOnlySpan<ConvectionLink> links, float dt, float gasHeatCapacity, IAtmosphereState atmosphere, IThermalState thermal ) {
+		public void Exchange( ReadOnlySpan<ConvectionCell> cells, ReadOnlySpan<ConvectionLink> links, float dt, float gasHeatCapacity, IAtmosphereConvectionState atmosphere, IThermalConvectionState thermal ) {
 			Events.Add( 'E' );
-			PublishedStepsDuringExchange.Add( atmosphere.Frames.StepCount );
+			PublishedStepsDuringExchange.Add( Frames.StepCount );
 			StructureStepsDuringExchange.Add( _structureSteps );
 			_convection.Exchange( cells, links, dt, gasHeatCapacity, atmosphere, thermal );
 		}

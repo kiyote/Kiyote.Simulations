@@ -4,7 +4,7 @@ using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 
-internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
+internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere, IAtmosphereConvectionState
 	where TStrategy : struct, IAtmosphereCellStrategy<TCell> {
 
 	private const float MinimumTemperature = 2.7f;
@@ -134,6 +134,12 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 
 	IGridLayer<float> IAtmosphereState.Temperature => _temperature;
 
+	IGridLayer<float> IAtmosphereConvectionState.Temperature => _temperature;
+
+	float IAtmosphereConvectionState.GetTotalGasAt( int chunk, int local ) => GetTotal( chunk, local );
+
+	float IAtmosphereConvectionState.AddEnergyAt( int chunk, int local, float capacity, float joules ) => ApplyEnergy( chunk, local, capacity, joules );
+
 	IGridLayer<float> IAtmosphereState.WindX => _windX;
 
 	IGridLayer<float> IAtmosphereState.WindY => _windY;
@@ -251,7 +257,15 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		if( total <= 0.0f ) {
 			return 0.0f;
 		}
-		float capacity = total * _settings.HeatCapacity;
+		return ApplyEnergy( chunk, local, total * _settings.HeatCapacity, joules );
+	}
+
+	private float ApplyEnergy(
+		int chunk,
+		int local,
+		float capacity,
+		float joules
+	) {
 		ref float t = ref _temperature.GetValues( chunk )[local];
 		float next = MathF.Max( MinimumTemperature, t + ( joules / capacity ) );
 		float applied = ( next - t ) * capacity;
