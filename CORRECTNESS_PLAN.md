@@ -350,7 +350,68 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   (projection 1-6 B/call; airflow 2-6 B/call) are retained honestly in
   `BENCHMARK.md`, which records B2 core statistics. W4 LowFidelity tables remain
   unchanged because those workloads were not rerun for W5.
-- W6-W8 optional performance experiments have not started. W6 is next; retain
+- W6: completed, candidate rejected under D6. The prototype marked each computed
+  `_temperatureNext` chunk dirty after conduction/radiation, relying on the owner
+  swap to transfer those flags to bound temperature. It removed the second
+  dirty-only chunk traversal without changing physics, atmosphere's selected-
+  chunk handling, public APIs or dependencies. Correctness/allocation checks
+  passed, but representative end-to-end measurements did not demonstrate the
+  required repeatable 10% improvement. The runtime change was therefore reverted;
+  the post-revert Release runtime DLL matched the preserved baseline's SHA256.
+- W6 retained coverage: 19 new integration cases verify exact conduction across
+  a negative-coordinate chunk boundary, zero/one/two/three/eight ticks per update,
+  repeated swaps with and without intervening commits, stable bound temperature
+  identity, exact dirty commit counts, unchanged unrelated source fields, pending
+  added energy with and without a preceding commit, zero-step dirty preservation,
+  final solar-heated/radiatively cooled persistence, retained empty chunks,
+  entirely empty compilations, and exact zero warmed allocations with and without
+  commits. The full 454-test Release suite passed on the candidate. The retained
+  implementation passes all 454 tests in both Debug and Release, with zero build
+  warnings/errors. Thermal benchmark setup now enforces zero current-thread
+  allocations over 100 fixed-sun and 100 moving-sun calls after warming both;
+  each timed call also verifies exactly one actual thermal tick.
+- W6 measurements: matched A1 -> B1 -> B2 -> A2 runs of all ten LowFidelity
+  benchmark cases. Benchmark code, workloads and published dependencies were
+  identical between versions. A1/A2 used preserved baseline Release binaries;
+  B1/B2 used the single-traversal candidate. Baseline binary hashes were checked
+  before A1 and A2. Same MediumRun/InProcessNoEmit, 10 warmups/15 measurements,
+  host and runtime as W4; no other build/test/benchmark ran concurrently.
+  Reports remain under
+  `BenchmarkDotNet.Artifacts/correctness-w6-{A1,B1,B2,A2}`.
+  The intended primary workload was the existing 100x100 standalone thermal
+  update, not an isolated dirty-marking or empty-world microbenchmark. Moving
+  sun, dense coupled one/eight-tick updates and four dense/sparse rooms supplied
+  consumer-level comparisons; atmosphere, frame reads and metadata-only rebuilds
+  supplied controls.
+
+  | Workload (all times us) | A1 | A2 | B1 | B2 | Mean time change |
+  |------------------------|---:|---:|---:|---:|-----------------:|
+  | Atmosphere.Update | 281.46 | 266.94 | 272.77 | 248.29 | -5.0% |
+  | ReadPressureFrame | 16.62 | 15.72 | 16.14 | 15.12 | -3.3% |
+  | Thermal.Update | 208.3 | 198.6 | 214.7 | 201.4 | +2.3% |
+  | Thermal.UpdateWithMovingSun | 236.0 | 247.1 | 241.9 | 235.4 | -1.2% |
+  | Coupled 100x100, one tick | 789.4 | 865.3 | 822.8 | 833.1 | +0.1% |
+  | Coupled 100x100, eight ticks | 5827.6 | 6357.2 | 6006.2 | 5560.3 | -5.1% |
+  | Four dense rooms, update | 66.24 | 66.31 | 67.63 | 63.89 | -0.8% |
+  | Four dense rooms, rebuild | 126.23 | 134.35 | 125.16 | 125.11 | -4.0% |
+  | Four sparse rooms, update | 148.49 | 156.53 | 141.33 | 149.75 | -4.6% |
+  | Four sparse rooms, rebuild | 795.22 | 817.88 | 823.42 | 831.90 | +2.6% |
+
+  Changes compare the arithmetic means of the candidate and baseline run means,
+  not pooled statistical estimates. No workload demonstrates a repeatable 10%
+  improvement, and control drift/bimodal-distribution warnings prevent attributing
+  the small observed changes to W6. Thermal.Update was slower in both candidate
+  runs than in the faster baseline. No greater-than-10% slowdown is confirmed;
+  rejection is for failure to demonstrate the required gain, not a proven large
+  regression or correctness failure.
+- W6 allocation gates: standalone thermal and coupled dense/sparse benchmark
+  setups passed exact warmed zero-allocation checks in all four runs, as do the
+  new swap/commit allocation tests. Separate in-process BenchmarkDotNet figures
+  are preserved honestly: A2 reports 1 B for standalone thermal and four-room
+  updates, 6 B/47 B for dense coupled one/eight ticks. Rebuilds allocate by design.
+  `BENCHMARK.md` records A2 LowFidelity statistics for the retained implementation,
+  not the rejected candidate. Core W5 tables remain unchanged.
+- W7-W8 optional performance experiments have not started. W7 is next; retain
   each candidate only if matched, repeated measurements meet D6/D7.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation
@@ -524,12 +585,17 @@ historical regression.
 
 Priority: benchmark-gated optimization. Depends on W1.
 
-In [Thermal.cs](src/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity/Thermals/Thermal.cs),
-mark the computed destination chunk dirty during the conduction/radiation loop.
-Let the subsequent owner swap transfer those flags to the bound temperature layer,
+Status: completed and rejected under D6. Keep the existing post-swap dirty-marking
+traversal; see the progress section for the matched four-run evidence.
+
+The evaluated candidate in
+[Thermal.cs](src/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity/Thermals/Thermal.cs)
+marked the computed destination chunk dirty during the conduction/radiation loop.
+The subsequent owner swap transferred those flags to the bound temperature layer,
 removing the second chunk traversal solely for dirty marking.
 
-Test repeated swaps with and without intervening commits and with empty chunks.
+Retained tests cover repeated swaps with and without intervening commits and with
+empty chunks, physical persistence, radiation/solar output and warmed allocations.
 Do not apply whole-layer swapping to atmosphere: it computes selected work chunks,
 and inactive scratch chunks can be stale.
 

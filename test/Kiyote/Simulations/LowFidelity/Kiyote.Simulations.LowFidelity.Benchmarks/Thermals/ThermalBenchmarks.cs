@@ -47,11 +47,28 @@ public class ThermalBenchmarks {
 		_thermal.SunDirection = new Vector( 1.0f, -1.0f );
 	}
 
+	[GlobalSetup]
+	public void WarmupAndValidateAllocations() {
+		for( int i = 0; i < 100; i++ ) {
+			Update();
+			UpdateWithMovingSun();
+		}
+		long before = GC.GetAllocatedBytesForCurrentThread();
+		for( int i = 0; i < 100; i++ ) {
+			Update();
+			UpdateWithMovingSun();
+		}
+		long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+		if( allocated != 0 ) {
+			throw new InvalidOperationException( $"Warmed thermal updates allocated {allocated} managed bytes." );
+		}
+	}
+
 	[Benchmark]
 	public void Update() {
 		// Keep a heat source running so the plate never settles.
 		_thermal.AddEnergy( 50, 50, 100000.0f );
-		_ = _thermal.Update( Step );
+		Advance();
 	}
 
 	[Benchmark]
@@ -61,7 +78,13 @@ public class ThermalBenchmarks {
 		float angle = _sunStep * MathF.PI / 180.0f;
 		_thermal.SunDirection = new Vector( MathF.Cos( angle ), MathF.Sin( angle ) );
 		_thermal.AddEnergy( 50, 50, 100000.0f );
-		_ = _thermal.Update( Step );
+		Advance();
+	}
+
+	private void Advance() {
+		if( _thermal.Update( Step ) != 1 ) {
+			throw new InvalidOperationException( "The benchmark did not advance exactly one thermal tick." );
+		}
 	}
 
 	[GlobalCleanup]

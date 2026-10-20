@@ -42,28 +42,28 @@
 
 | Method            | Mean      | Error    | StdDev   | Allocated |
 |-------------------|----------:|---------:|---------:|----------:|
-| Update            | 253.55 us | 11.992 us | 11.217 us |         - |
-| ReadPressureFrame |  15.47 us |  0.272 us |  0.254 us |         - |
+| Update            | 266.94 us | 20.663 us | 19.328 us |         - |
+| ReadPressureFrame |  15.72 us |  0.311 us |  0.276 us |         - |
 
 ## LowFidelity.Thermal
 
 | Method              | Mean     | Error   | StdDev  | Allocated |
 |---------------------|---------:|--------:|--------:|----------:|
-| Update              | 200.6 us | 10.41 us | 9.23 us |       1 B |
-| UpdateWithMovingSun | 228.4 us |  8.55 us | 7.99 us |       1 B |
+| Update              | 198.6 us | 5.35 us | 4.74 us |       1 B |
+| UpdateWithMovingSun | 247.1 us | 5.58 us | 4.95 us |       1 B |
 
 ## LowFidelity.AtmosphericThermals
 
 | Method | TicksPerUpdate | Mean       | Error     | StdDev    | Allocated |
 |--------|---------------:|-----------:|----------:|----------:|----------:|
-| Update |              1 |   788.3 us |  25.95 us |  24.28 us |       6 B |
-| Update |              8 | 6,453.5 us | 168.96 us | 158.04 us |      45 B |
+| Update |              1 |   865.3 us |  14.12 us |  13.21 us |       6 B |
+| Update |              8 | 6,357.2 us | 125.35 us | 117.26 us |      47 B |
 
 ## LowFidelity.ConvectionTopologyBenchmarks
 
 | Method          | Sparse | Mean      | Error     | StdDev    | Allocated |
 |-----------------|--------|----------:|----------:|----------:|----------:|
-| Update          | False  |  63.46 us |  0.678 us |  0.601 us |       1 B |
-| RebuildTopology | False  | 122.62 us |  3.173 us |  2.968 us |  127985 B |
-| Update          | True   | 147.67 us |  4.233 us |  3.959 us |       1 B |
-| RebuildTopology | True   | 872.31 us | 20.559 us | 19.231 us |  217876 B |
+| Update          | False  |  66.31 us |  3.249 us |  3.039 us |       1 B |
+| RebuildTopology | False  | 134.35 us |  3.176 us |  2.971 us |  127985 B |
+| Update          | True   | 156.53 us | 10.560 us |  9.878 us |       1 B |
+| RebuildTopology | True   | 817.88 us | 28.112 us | 26.296 us |  217870 B |
