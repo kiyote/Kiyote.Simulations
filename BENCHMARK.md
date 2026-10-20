@@ -1,12 +1,3 @@
-# Benchmarks
-
-```text
-BenchmarkDotNet v0.15.8, Windows 11 (10.0.26100.9448/24H2/2024Update/HudsonValley)
-Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical cores
-.NET SDK 11.0.100-rc.2.26504.105
-  [Host] : .NET 10.0.13 (10.0.13, 10.0.1326.50504), X64 RyuJIT x86-64-v3
-```
-
 ## Topology.GridDiffusion
 
 | Method | Mean     | Error    | StdDev   | Allocated |
@@ -41,12 +32,19 @@ Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical c
 
 | Method            | Mean      | Error    | StdDev   | Allocated |
 |-------------------|----------:|---------:|---------:|----------:|
-| Update            | 262.11 us | 9.045 us | 8.461 us |         - |
-| ReadPressureFrame |  16.09 us | 0.274 us | 0.257 us |         - |
+| Update            | 249.14 us | 9.515 us | 8.900 us |         - |
+| ReadPressureFrame |  15.19 us | 0.418 us | 0.391 us |         - |
 
 ## LowFidelity.Thermal
 
 | Method              | Mean     | Error   | StdDev  | Allocated |
 |---------------------|---------:|--------:|--------:|----------:|
-| Update              | 209.4 us | 4.65 us | 4.35 us |       1 B |
-| UpdateWithMovingSun | 233.9 us | 6.30 us | 5.89 us |       3 B |
+| Update              | 199.7 us | 8.13 us | 7.21 us |       1 B |
+| UpdateWithMovingSun | 234.9 us | 5.90 us | 5.52 us |       1 B |
+
+## LowFidelity.AtmosphericThermals
+
+| Method | TicksPerUpdate | Mean     | Error     | StdDev    | Allocated |
+|--------|---------------:|---------:|----------:|----------:|----------:|
+| Update |              1 | 1.180 ms | 0.0543 ms | 0.0482 ms |         - |
+| Update |              8 | 9.511 ms | 0.2705 ms | 0.2530 ms |      62 B |

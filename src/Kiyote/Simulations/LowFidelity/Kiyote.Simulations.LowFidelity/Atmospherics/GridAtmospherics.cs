@@ -46,6 +46,13 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 		ICompiledGridAssembly<TCell> compiled,
 		TStrategy strategy
 	) {
+		return Create( compiled, strategy );
+	}
+
+	public Atmosphere<TCell, TStrategy> Create<TCell, TStrategy>(
+		ICompiledGridAssembly<TCell> compiled,
+		TStrategy strategy
+	) where TStrategy : struct, IAtmosphereCellStrategy<TCell> {
 		return new Atmosphere<TCell, TStrategy>(
 			compiled,
 			strategy,

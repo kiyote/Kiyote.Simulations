@@ -6,8 +6,8 @@ namespace Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 
 internal sealed class GridAtmosphericThermals : IGridAtmosphericThermals {
 
-	private readonly IGridAtmospherics _atmospherics;
-	private readonly IGridThermals _thermals;
+	private readonly GridAtmospherics _atmospherics;
+	private readonly GridThermals _thermals;
 	private readonly IMaterialRegistry _materials;
 	private readonly IAtmosphericsSettings _atmosphericsSettings;
 	private readonly IAtmosphericThermalsSettings _settings;
@@ -15,8 +15,8 @@ internal sealed class GridAtmosphericThermals : IGridAtmosphericThermals {
 	private readonly IAtmosphericThermalsConvection _convection;
 
 	public GridAtmosphericThermals(
-		IGridAtmospherics atmospherics,
-		IGridThermals thermals,
+		GridAtmospherics atmospherics,
+		GridThermals thermals,
 		IMaterialRegistry materials,
 		IAtmosphericsSettings atmosphericsSettings,
 		IAtmosphericThermalsSettings settings,

@@ -30,6 +30,41 @@ disposal removes only its own registered layers. Removing a simulation-owned lay
 externally or disposing its compilation early violates this lifetime contract and
 is reported rather than silently ignored. Normal disposal is idempotent.
 
+## Coupled time stepping and publication
+
+The combined simulation captures one fixed step and the smaller of the atmosphere
+and thermal `MaxStepsPerUpdate` settings at construction. Both caps must be
+positive. The clock step must be finite, positive and representable as at least one
+`TimeSpan` tick. Elapsed time must be nonnegative.
+
+One coordinator accumulator counts elapsed `TimeSpan` ticks, avoiding floating
+remainder drift when the same time is supplied in smaller fragments. Each due tick
+advances atmosphere once, advances structure once, then performs any heat exchange
+due at that tick. Both subsystems therefore advance the same simulated duration.
+If the number of whole due ticks exceeds the shared cap, the coordinator runs the
+cap and drops all excess time, including the fractional remainder. At exactly the
+cap, the fractional remainder is retained.
+
+`ExchangeInterval` keeps its fixed-tick quantization: divide by the clock step,
+round to the nearest integer with midpoints to even, and clamp to at least one tick.
+For a 0.1-second clock, 0.25 seconds means two ticks and 0.35 seconds means four.
+The interval and quantized exchange duration must be finite, and the tick count
+must fit an integer. `Update` still returns **exchanges**, not ticks.
+
+Topology/material/solar preparation and convection-link rebuilding finish before
+time is consumed or physics runs. Preparation failures propagate without advancing
+either subsystem or publishing an intermediate frame. After all ticks and
+exchanges, pressure/wind are finalized and all atmosphere quantities are published
+once. Venting diagnostics cover the whole update. Zero-step updates still prepare,
+finalize queued inputs and publish, but do not advance physics or exchange cadence.
+Individual old leases stay unchanged; quantities remain independently leased,
+not an atomic multi-quantity snapshot.
+
+Standalone atmosphere and thermal instances retain their independent accumulators
+and step caps. Public standalone factories and the combined factory use the same
+typed internal engine construction and configured stage services; combined stepping
+does not downcast public state views or call child elapsed-time updates.
+
 ## Topology changes
 
 For live cell additions/removals and relevant permeability/material changes, call

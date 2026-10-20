@@ -17,30 +17,52 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	private readonly TThermalStrategy _thermalStrategy;
 	private readonly IAtmosphericsSettings _atmosphericsSettings;
 	private readonly IAtmosphericThermalsConvection _convection;
-	private readonly IAtmosphere _atmosphere;
-	private readonly IThermal _thermal;
+	private readonly Atmosphere<TCell, TAtmosphereStrategy> _atmosphere;
+	private readonly Thermal<TCell, TThermalStrategy> _thermal;
 	private readonly float[] _conductances;
 	private readonly float[] _capacities;
 	private readonly int _ticksPerExchange;
 	private readonly float _exchangeTime;
+	private readonly float _fixedTimeStep;
+	private readonly long _fixedStepTicks;
+	private readonly int _maxStepsPerUpdate;
 	private ConvectionCell[] _cells;
 	private ConvectionLink[] _links;
 	private bool _topologyChanged;
 	private int _ticks;
+	private long _accumulatorTicks;
 	private bool _disposed;
 
 	public AtmosphericThermals(
 		ICompiledGridAssembly<TCell> compiled,
 		TAtmosphereStrategy atmosphereStrategy,
 		TThermalStrategy thermalStrategy,
-		IGridAtmospherics atmospherics,
-		IGridThermals thermals,
+		GridAtmospherics atmospherics,
+		GridThermals thermals,
 		IMaterialRegistry materials,
 		IAtmosphericsSettings atmosphericsSettings,
 		IAtmosphericThermalsSettings settings,
 		ISimulationClock clock,
 		IAtmosphericThermalsConvection convection
 	) {
+		_fixedTimeStep = clock.FixedTimeStep;
+		if( !float.IsFinite( _fixedTimeStep ) || _fixedTimeStep <= 0.0f || _fixedTimeStep > TimeSpan.MaxValue.TotalSeconds ) {
+			throw new ArgumentOutOfRangeException( nameof( clock ), "The fixed step must be finite, positive and representable as a TimeSpan." );
+		}
+		_fixedStepTicks = TimeSpan.FromSeconds( _fixedTimeStep ).Ticks;
+		if( _fixedStepTicks == 0 ) {
+			throw new ArgumentOutOfRangeException( nameof( clock ), "The fixed step must be at least one TimeSpan tick." );
+		}
+		float interval = settings.ExchangeInterval;
+		float ticks = MathF.Max( 1.0f, MathF.Round( interval / _fixedTimeStep ) );
+		if( !float.IsFinite( interval ) || !float.IsFinite( ticks ) || (double)ticks > int.MaxValue ) {
+			throw new ArgumentOutOfRangeException( nameof( settings ), "The exchange interval must be finite and quantize to a representable number of fixed steps." );
+		}
+		_ticksPerExchange = (int)ticks;
+		_exchangeTime = _ticksPerExchange * _fixedTimeStep;
+		if( !float.IsFinite( _exchangeTime ) ) {
+			throw new ArgumentOutOfRangeException( nameof( settings ), "The quantized exchange duration must be finite." );
+		}
 		_compiled = compiled;
 		_atmosphereStrategy = atmosphereStrategy;
 		_thermalStrategy = thermalStrategy;
@@ -48,14 +70,17 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 		_convection = convection;
 		_conductances = [.. materials.Definitions.Select( d => d.Convection )];
 		_capacities = [.. materials.Definitions.Select( d => d.HeatCapacity )];
-		_ticksPerExchange = Math.Max( 1, (int)MathF.Round( settings.ExchangeInterval / clock.FixedTimeStep ) );
-		_exchangeTime = _ticksPerExchange * clock.FixedTimeStep;
 		_cells = [];
 		_links = [];
 		_atmosphere = atmospherics.Create( compiled, atmosphereStrategy );
 		bool initialized = false;
 		try {
 			_thermal = thermals.Create( compiled, thermalStrategy );
+			int atmosphereCap = _atmosphere.MaxStepsPerUpdate;
+			int thermalCap = _thermal.MaxStepsPerUpdate;
+			ArgumentOutOfRangeException.ThrowIfNegativeOrZero( atmosphereCap, nameof( IAtmosphericsSettings.MaxStepsPerUpdate ) );
+			ArgumentOutOfRangeException.ThrowIfNegativeOrZero( thermalCap, nameof( IThermalsSettings.MaxStepsPerUpdate ) );
+			_maxStepsPerUpdate = Math.Min( atmosphereCap, thermalCap );
 			BuildLinks();
 			initialized = true;
 		} finally {
@@ -70,24 +95,49 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 
 	IThermalState IAtmosphericThermals.Thermal => _thermal;
 
-	// Both simulations step on the same clock, so the atmosphere's tick count drives the exchanges.
 	int IAtmosphericThermals.Update(
 		TimeSpan elapsed
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
+		ArgumentOutOfRangeException.ThrowIfNegative( elapsed.Ticks, nameof( elapsed ) );
 
-		_ticks += _atmosphere.Update( elapsed );
-		_ = _thermal.Update( elapsed );
+		_atmosphere.PrepareUpdate();
+		_thermal.PrepareUpdate();
 		if( _topologyChanged ) {
 			BuildLinks();
 		}
 
-		int exchanges = 0;
-		while( _ticks >= _ticksPerExchange ) {
-			_convection.Exchange( _cells, _links, _exchangeTime, _atmosphericsSettings.HeatCapacity, _atmosphere, _thermal );
-			_ticks -= _ticksPerExchange;
-			exchanges++;
+		// Split before adding so even TimeSpan.MaxValue cannot overflow the accumulator.
+		long available = elapsed.Ticks / _fixedStepTicks;
+		long remainder = elapsed.Ticks % _fixedStepTicks;
+		long untilNext = _fixedStepTicks - _accumulatorTicks;
+		if( remainder >= untilNext ) {
+			available++;
+			remainder -= untilNext;
+		} else {
+			remainder += _accumulatorTicks;
 		}
+		int steps;
+		if( available > _maxStepsPerUpdate ) {
+			steps = _maxStepsPerUpdate;
+			_accumulatorTicks = 0;
+		} else {
+			steps = (int)available;
+			_accumulatorTicks = remainder;
+		}
+
+		int exchanges = 0;
+		for( int i = 0; i < steps; i++ ) {
+			_atmosphere.Step( _fixedTimeStep );
+			_thermal.Step( _fixedTimeStep );
+			_ticks++;
+			if( _ticks >= _ticksPerExchange ) {
+				_convection.Exchange( _cells, _links, _exchangeTime, _atmosphericsSettings.HeatCapacity, _atmosphere, _thermal );
+				_ticks -= _ticksPerExchange;
+				exchanges++;
+			}
+		}
+		_atmosphere.Publish();
 		return exchanges;
 	}
 

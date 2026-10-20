@@ -31,6 +31,13 @@ internal sealed class GridThermals : IGridThermals {
 		ICompiledGridAssembly<TCell> compiled,
 		TStrategy strategy
 	) {
+		return Create( compiled, strategy );
+	}
+
+	public Thermal<TCell, TStrategy> Create<TCell, TStrategy>(
+		ICompiledGridAssembly<TCell> compiled,
+		TStrategy strategy
+	) where TStrategy : struct, IThermalCellStrategy<TCell> {
 		return new Thermal<TCell, TStrategy>(
 			compiled,
 			strategy,

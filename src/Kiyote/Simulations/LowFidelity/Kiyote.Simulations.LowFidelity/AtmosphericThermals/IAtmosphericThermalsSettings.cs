@@ -3,7 +3,8 @@ namespace Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 public interface IAtmosphericThermalsSettings {
 
 	// Simulated seconds between heat exchanges between the gas and the structure.
-	// Time is counted in simulation clock ticks; an exchange runs once enough ticks have elapsed.
+	// Rounded to the nearest fixed tick (midpoints to even), with a minimum of one tick.
+	// Must be finite and quantize to a representable number of ticks.
 	float ExchangeInterval { get; }
 
 }

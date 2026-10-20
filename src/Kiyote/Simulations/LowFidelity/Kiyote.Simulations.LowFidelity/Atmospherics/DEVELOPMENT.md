@@ -98,6 +98,14 @@ Diagonals are skipped: they double the cost and pipes already spread isotropical
 
 `Update( elapsed )` accumulates game time and runs fixed steps of `FixedTimeStep` seconds, returning how many ran. At most `MaxStepsPerUpdate` run per call; any excess time is dropped, so a stalled frame slows the simulation rather than spiralling.
 
+This loop is standalone-only. The combined coordinator owns one `TimeSpan`-tick
+accumulator, captures the shared clock step and smaller child cap, and calls the
+internal prepare/step/publish phases directly. Each shared tick steps atmosphere
+and structure before any due convection; derived state and frames are finalized
+once after all ticks/exchanges. Diagnostics reset once per combined update, not
+per internal tick. Preparation completes before consuming time, including when
+elapsed time is zero. No intermediate frame is published before convection.
+
 ## Implementation notes
 
 - **Layout:** the compiled assembly's read-only `GridLayout` (Kiyote.Geometry) with 32×32 chunks, the smallest size `GridCompiler` accepts and a whole number of `Vector256` lanes for byte-sized layers (`Direction`, `bool`). Each quantity is one `IGridLayer<T>` over that layout (structure of arrays), with chunk values accessed directly through `GetValues`. A chunk index and local index identify the same cell in every layer. Occupancy changes go through the assembly, not the layout.

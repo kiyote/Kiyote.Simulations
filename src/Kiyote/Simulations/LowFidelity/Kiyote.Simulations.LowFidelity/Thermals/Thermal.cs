@@ -77,6 +77,8 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 
 	IMaterialRegistry IThermalState.Materials => _materials;
 
+	internal int MaxStepsPerUpdate => _settings.MaxStepsPerUpdate;
+
 	IGridLayer<float> IThermalState.Temperature => _temperature;
 
 	Vector IThermalState.SunDirection {
@@ -126,7 +128,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_temperature.MarkDirty( chunk );
 	}
 
-	void IThermal.InvalidateTopology(
+	public void InvalidateTopology(
 		Rect area
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
@@ -135,12 +137,12 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		}
 	}
 
-	void IThermal.InvalidateTopology() {
+	public void InvalidateTopology() {
 		ObjectDisposedException.ThrowIf( _disposed, this );
 		_topologyChanged = true;
 	}
 
-	void IDisposable.Dispose() {
+	public void Dispose() {
 		if( _disposed ) {
 			return;
 		}

@@ -164,7 +164,7 @@ to publish packages, push repositories, or rewrite their unrelated changes.
 - W2 validation: solution builds without warnings/errors; all 274 tests pass.
   All 66 ownership/lifecycle regressions also pass in Release, including the
   existing zero-allocation checks.
-- W3: completed. Explicit invalidation covers live occupancy, permeability/material
+- W3: completed in `04c6f31`. Explicit invalidation covers live occupancy, permeability/material
   properties, derived-state publication, solar exposure, and convection links.
   Empty areas do nothing; a full invalidation supersedes queued areas. Replacements
   are staged before old metadata registrations are removed, with temporary cleanup
@@ -182,8 +182,42 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   presence comparison. The explicit caller/publication invalidation contract is
   established; caching that comparison and frame-copy addresses remains the
   benchmark-gated W8 experiment. No upstream package change was required.
-- W9: next required correctness package; coupled scheduling/final publication is
-  unchanged so far. W4-W8 optional performance experiments have not started.
+- W9: completed. One coordinator-owned `TimeSpan`-tick accumulator advances both
+  children using the captured shared step and smaller child cap. Each tick advances
+  atmosphere, advances structure, then performs any due exchange. All preparation
+  finishes before consuming elapsed time; derived atmosphere state and frames
+  finalize once after all ticks/exchanges, including zero-step updates.
+  Standalone loops remain independent. Typed internal factory access avoids casts
+  of public state views, extra step interfaces, and child elapsed-time updates.
+- W9 validation: 42 new coupled timing cases; all 365 solution tests pass in Debug
+  and Release, with zero build warnings/errors. Cases cover exact phase order,
+  fractional batching, unequal caps, exact-cap remainder retention, excess-time
+  dropping, maximum elapsed values, cadence quantization, final-frame consistency,
+  held leases, aggregate venting, pre-step failure retry, commit persistence,
+  invalid configuration, the minimum representable step, standalone behavior,
+  and zero-allocation coupled batches.
+- W9 corrected-behavior baseline: reran all four existing LowFidelity workloads
+  and added a sealed 100x100 coupled aluminium/gas workload. Each coupled
+  invocation verifies its actual tick and exchange counts (one or eight each).
+  Source injection keeps atmosphere/structure work active; timing includes final
+  publication. The new coupled cases were also rerun for confirmation.
+  Baseline results are in `BENCHMARK.md`; core kernel results are retained because
+  those kernels did not change. No meaningful regression was established in the
+  rerun standalone workloads. There is no comparable old coupled benchmark, so
+  its measurements establish a baseline rather than a claimed speedup/regression.
+- W9 benchmark records: primary reports are under
+  `BenchmarkDotNet.Artifacts/correctness-w9-20261020-lowfidelity`; coupled confirmation
+  reports are under the same path with `-confirmation`. Same MediumRun,
+  InProcessNoEmit, 10 warmups/15 measurements and host/runtime as the migration
+  runs. Coupled confirmation means: 1.180 ms for one tick/exchange and 9.511 ms
+  for eight. The benchmark itself warms 100 invocations then requires exactly zero
+  current-thread managed bytes over another 100 on each actual 100x100 workload;
+  both gates passed. Preserve BenchmarkDotNet's separate in-process allocation
+  figures honestly: confirmation reports zero for one tick and 62 B/invocation
+  for eight (3,984 total measured bytes over 64 invocations), despite the exact
+  warmed-update gates measuring zero.
+- W4-W8 optional performance experiments have not started. W4 is next; retain
+  each candidate only if matched, repeated measurements meet D6/D7.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation
 
@@ -419,10 +453,10 @@ contain different histories; that redesign is explicitly deferred.
 
 Priority: required correctness. Depends on W1-W3. Approved explicitly in D10.
 
-The current coordinator advances all atmosphere steps, publishes its frames,
-advances thermal steps, then performs all due exchanges. This can publish stale
-temperature/pressure and makes coupling depend on elapsed-time batching. Different
-child step caps can also advance the subsystems by different simulated durations.
+The original coordinator advanced all atmosphere steps, published its frames,
+advanced thermal steps, then performed all due exchanges. This published stale
+temperature/pressure and made coupling depend on elapsed-time batching. Different
+child step caps could also advance the subsystems by different simulated durations.
 
 1. Give the combined coordinator one elapsed-time accumulator and one exchange
    cadence. Keep standalone simulations' own elapsed-time loops for standalone use.

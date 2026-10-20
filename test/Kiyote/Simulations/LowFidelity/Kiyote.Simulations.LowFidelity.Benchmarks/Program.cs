@@ -21,6 +21,7 @@ public static class Program {
 			.FromTypes( [
 				typeof( Atmospherics.AtmosphereBenchmarks ),
 				typeof( Thermals.ThermalBenchmarks ),
+				typeof( AtmosphericThermals.AtmosphericThermalsBenchmarks ),
 			] )
 			.Run( args, config );
 	}

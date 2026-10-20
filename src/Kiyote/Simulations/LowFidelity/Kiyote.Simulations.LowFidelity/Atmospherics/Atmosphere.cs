@@ -128,6 +128,8 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 
 	IGasRegistry IAtmosphereState.Gases => _gases;
 
+	internal int MaxStepsPerUpdate => _settings.MaxStepsPerUpdate;
+
 	IGridLayer<float> IAtmosphereState.Pressure => _pressure;
 
 	IGridLayer<float> IAtmosphereState.Temperature => _temperature;
@@ -185,7 +187,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		return steps;
 	}
 
-	void IAtmosphere.InvalidateTopology(
+	public void InvalidateTopology(
 		Rect area
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
@@ -194,7 +196,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		}
 	}
 
-	void IAtmosphere.InvalidateTopology() {
+	public void InvalidateTopology() {
 		ObjectDisposedException.ThrowIf( _disposed, this );
 		_pendingFullRebuild = true;
 		_pendingAreas.Clear();
@@ -308,7 +310,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		return total > 0.0f ? _gas[gas.Value].GetValues( chunk )[local] / total : 0.0f;
 	}
 
-	void IDisposable.Dispose() {
+	public void Dispose() {
 		if( _disposed ) {
 			return;
 		}

@@ -13,8 +13,9 @@ public interface IAtmosphericThermals : IDisposable {
 
 	IThermalState Thermal { get; }
 
-	// Updates both simulations, then runs any heat exchanges that have come due.
-	// Returns the number of heat exchanges run.
+	// Steps both children once per shared tick, then performs any exchange due at that tick.
+	// Publishes the final coupled state once, including queued inputs on zero-step updates.
+	// Uses the smaller child step cap; excess time is dropped. Returns the number of exchanges.
 	int Update(
 		TimeSpan elapsed
 	);

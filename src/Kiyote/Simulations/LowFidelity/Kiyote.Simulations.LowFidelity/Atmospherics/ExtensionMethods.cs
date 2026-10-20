@@ -15,6 +15,7 @@ public static class ExtensionMethods {
 			.AddSingleton<IAtmosphereThermal, AtmosphereThermal>()
 			.AddSingleton<IAtmosphereCondensation, AtmosphereCondensation>()
 			.AddSingleton<IAtmosphereWind, AtmosphereWind>()
-			.AddSingleton<IGridAtmospherics, GridAtmospherics>();
+			.AddSingleton<GridAtmospherics>()
+			.AddSingleton<IGridAtmospherics>( provider => provider.GetRequiredService<GridAtmospherics>() );
 	}
 }

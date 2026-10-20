@@ -11,6 +11,7 @@ public static class ExtensionMethods {
 			.AddSingleton<IThermalConduction, ThermalConduction>()
 			.AddSingleton<IThermalRadiation, ThermalRadiation>()
 			.AddSingleton<IThermalSolar, ThermalSolar>()
-			.AddSingleton<IGridThermals, GridThermals>();
+			.AddSingleton<GridThermals>()
+			.AddSingleton<IGridThermals>( provider => provider.GetRequiredService<GridThermals>() );
 	}
 }
