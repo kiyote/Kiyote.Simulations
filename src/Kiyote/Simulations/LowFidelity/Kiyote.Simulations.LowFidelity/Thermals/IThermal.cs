@@ -10,6 +10,8 @@ public interface IThermal : IThermalState, IDisposable {
 		TimeSpan elapsed
 	);
 
+	// Required after live occupancy or material edits, before Update; use assembly coordinates.
+	// Empty areas do nothing. The parameterless overload refreshes everything.
 	void InvalidateTopology(
 		Rect area
 	);

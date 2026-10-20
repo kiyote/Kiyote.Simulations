@@ -189,12 +189,15 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		Rect area
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
-		_pendingAreas.Add( area );
+		if( !area.IsEmpty && !_pendingFullRebuild ) {
+			_pendingAreas.Add( area );
+		}
 	}
 
 	void IAtmosphere.InvalidateTopology() {
 		ObjectDisposedException.ThrowIf( _disposed, this );
 		_pendingFullRebuild = true;
+		_pendingAreas.Clear();
 	}
 
 	void IAtmosphereState.AddGas(
@@ -384,31 +387,49 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			return;
 		}
 		GridLayout layout = _compiled.ChunkLayout;
-		long covered = 0;
+		double covered = 0;
 		foreach( Rect area in _pendingAreas ) {
-			covered += (long)area.Width * area.Height;
+			covered += (double)area.Width * area.Height;
 		}
 		long size = layout.TryGetPopulatedBounds( out _, out _, out int width, out int height )
 			? (long)width * height
 			: 0;
 		PermeabilityConnectivity<TCell, TStrategy> connectivity = new PermeabilityConnectivity<TCell, TStrategy>( _strategy );
+		bool full = _pendingFullRebuild || covered > size * FullRebuildCoverage;
+		using OwnedGridLayers<TCell> replacements = new OwnedGridLayers<TCell>( _compiled, ChunkSize );
+		IGridLayer<bool> permeable = replacements.Add( _compiled.Bind<bool, PermeabilityBinding<TCell, TStrategy>>( new PermeabilityBinding<TCell, TStrategy>( _strategy ) ) );
+		IGridLayer<Direction> vacuum = replacements.Add( _compiled.CreateVacuumLayer() );
+		IGridLayer<Direction> connections = _connectivity;
 
-		if( _pendingFullRebuild || covered > size * FullRebuildCoverage ) {
-			_layers.Remove( _connectivity );
-			_connectivity = _layers.Add( _connectivityBuilder.Build( _compiled, connectivity ) );
-			Array.Fill( _active, true );
-			Array.Fill( _publish, true );
+		if( full ) {
+			connections = replacements.Add( _connectivityBuilder.Build( _compiled, connectivity ) );
 		} else {
 			foreach( Rect area in _pendingAreas ) {
 				_connectivityBuilder.Update( _compiled, _connectivity, connectivity, area );
-				Wake( area );
 			}
 		}
 
 		_layers.Remove( _permeable );
-		_permeable = _layers.Add( _compiled.Bind<bool, PermeabilityBinding<TCell, TStrategy>>( new PermeabilityBinding<TCell, TStrategy>( _strategy ) ) );
 		_layers.Remove( _vacuum );
-		_vacuum = _layers.Add( _compiled.CreateVacuumLayer() );
+		if( full ) {
+			_layers.Remove( _connectivity );
+		}
+		replacements.TransferTo( _layers );
+		_permeable = permeable;
+		_vacuum = vacuum;
+		_connectivity = connections;
+
+		if( full ) {
+			Array.Fill( _active, true );
+			Array.Fill( _publish, true );
+			foreach( int chunk in layout.EnumerateChunks() ) {
+				ResetClosedFlows( chunk );
+			}
+		} else {
+			foreach( Rect area in _pendingAreas ) {
+				Wake( area );
+			}
+		}
 
 		_pendingAreas.Clear();
 		_pendingFullRebuild = false;
@@ -419,11 +440,40 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	) {
 		GridLayout layout = _compiled.ChunkLayout;
 		int shift = layout.ChunkShift;
-		for( int cy = ( area.Y1 - 1 ) >> shift; cy <= ( area.Y2 + 1 ) >> shift; cy++ ) {
-			for( int cx = ( area.X1 - 1 ) >> shift; cx <= ( area.X2 + 1 ) >> shift; cx++ ) {
+		int top = (int)( Math.Max( (long)area.Y1 - 1, int.MinValue ) >> shift );
+		int bottom = (int)( Math.Min( (long)area.Y2 + 1, int.MaxValue ) >> shift );
+		int left = (int)( Math.Max( (long)area.X1 - 1, int.MinValue ) >> shift );
+		int right = (int)( Math.Min( (long)area.X2 + 1, int.MaxValue ) >> shift );
+		for( int cy = top; cy <= bottom; cy++ ) {
+			for( int cx = left; cx <= right; cx++ ) {
 				if( layout.TryGetChunk( cx, cy, out int chunk ) ) {
 					_active[chunk] = true;
+					_publish[chunk] = true;
+					ResetClosedFlows( chunk );
 				}
+			}
+		}
+	}
+
+	private void ResetClosedFlows(
+		int chunk
+	) {
+		ReadOnlySpan<Direction> connectivity = _connectivity.GetValues( chunk );
+		ReadOnlySpan<Direction> vacuum = _vacuum.GetValues( chunk );
+		ReadOnlySpan<bool> permeable = _permeable.GetValues( chunk );
+		Span<float> east = _flowEast.GetValues( chunk );
+		Span<float> south = _flowSouth.GetValues( chunk );
+		Span<float> vent = _vent.GetValues( chunk );
+		const Direction cardinal = Direction.North | Direction.East | Direction.South | Direction.West;
+		for( int i = 0; i < connectivity.Length; i++ ) {
+			if( ( connectivity[i] & Direction.East ) == 0 ) {
+				east[i] = 0.0f;
+			}
+			if( ( connectivity[i] & Direction.South ) == 0 ) {
+				south[i] = 0.0f;
+			}
+			if( !permeable[i] || ( vacuum[i] & cardinal ) == 0 ) {
+				vent[i] = 0.0f;
 			}
 		}
 	}

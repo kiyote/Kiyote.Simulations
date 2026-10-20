@@ -156,7 +156,7 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   updates allocate zero measured bytes for atmosphere, thermal, and combined
   simulations in both configurations. Ownership tracking allocates only during
   construction/rebuild, not steady-state stepping.
-- W2: completed. Added 26 structural-lifecycle cases covering retained/new/detached
+- W2: completed in `83bbaeb`. Added 26 structural-lifecycle cases covering retained/new/detached
   cells, empty replacements, detached layer references, transient flow/timing/
   exchange resets, frame-provider replacement and held leases, runtime option
   reapplication, and explicit commit/construction retries. Expanded the caller
@@ -164,8 +164,26 @@ to publish packages, push repositories, or rewrite their unrelated changes.
 - W2 validation: solution builds without warnings/errors; all 274 tests pass.
   All 66 ownership/lifecycle regressions also pass in Release, including the
   existing zero-allocation checks.
-- W3-W9: not started. Coupled scheduling/final-publication corrections and optional
-  performance experiments remain separate work packages.
+- W3: completed. Explicit invalidation covers live occupancy, permeability/material
+  properties, derived-state publication, solar exposure, and convection links.
+  Empty areas do nothing; a full invalidation supersedes queued areas. Replacements
+  are staged before old metadata registrations are removed, with temporary cleanup
+  and pending-work retention on failure. Affected neighbour rings wake and publish
+  even without a physics tick; blocked pipe momentum is cancelled without clearing
+  unchanged open pipes. Ring expansion clamps at signed coordinate limits.
+- W3 validation: added 49 live-edit cases; all 323 solution tests pass and the build
+  has no warnings/errors. All 115 ownership/lifecycle/invalidation cases pass in
+  Release, including exact zero-allocation checks after successful chunk-growth
+  invalidation for all three simulation kinds. Coverage includes existing/new
+  chunks, retained empty chunks, held leases, negative/limit coordinates, diagonals,
+  placement seams, all four thermal material properties, solar occlusion, convection
+  membership/energy balance, caller-owned layers, and repeated failure retries.
+- W3 retains complete vacuum/property rebuilds and the existing publication
+  presence comparison. The explicit caller/publication invalidation contract is
+  established; caching that comparison and frame-copy addresses remains the
+  benchmark-gated W8 experiment. No upstream package change was required.
+- W9: next required correctness package; coupled scheduling/final publication is
+  unchanged so far. W4-W8 optional performance experiments have not started.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation
 

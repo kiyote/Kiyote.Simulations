@@ -19,6 +19,8 @@ public interface IAtmosphericThermals : IDisposable {
 		TimeSpan elapsed
 	);
 
+	// Invalidates both children and convection links after live occupancy, permeability or material edits.
+	// Use assembly coordinates. Empty areas do nothing; the parameterless overload refreshes everything.
 	void InvalidateTopology(
 		Rect area
 	);

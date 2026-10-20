@@ -130,7 +130,9 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		Rect area
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
-		_topologyChanged = true;
+		if( !area.IsEmpty ) {
+			_topologyChanged = true;
+		}
 	}
 
 	void IThermal.InvalidateTopology() {
@@ -166,38 +168,48 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_temperature = _layers.Add( _compiled.Bind<float, ThermalTemperatureBinding<TCell, TStrategy>>( new ThermalTemperatureBinding<TCell, TStrategy>( _strategy ) ) );
 		_temperatureNext = _layers.Add( _compiled.CreateLayer<float>() );
 		_solarPower = _layers.Add( _compiled.CreateLayer<float>() );
-		BindStructure();
+		( _conductivity, _capacity, _emissivity, _absorptivity, _vacuum ) = BindStructure( _layers );
 		_topologyChanged = false;
 		_solarStale = true;
 	}
 
-	// Material properties and vacuum faces only change with the topology.
 	private void RebuildStructure() {
+		using OwnedGridLayers<TCell> replacements = new OwnedGridLayers<TCell>( _compiled, ChunkSize );
+		var structure = BindStructure( replacements );
 		_layers.Remove( _conductivity );
 		_layers.Remove( _capacity );
 		_layers.Remove( _emissivity );
 		_layers.Remove( _absorptivity );
 		_layers.Remove( _vacuum );
-		BindStructure();
+		replacements.TransferTo( _layers );
+		( _conductivity, _capacity, _emissivity, _absorptivity, _vacuum ) = structure;
 		_topologyChanged = false;
 		_solarStale = true;
 	}
 
-	[System.Diagnostics.CodeAnalysis.MemberNotNull(
-		nameof( _conductivity ), nameof( _capacity ), nameof( _emissivity ), nameof( _absorptivity ), nameof( _vacuum )
-	)]
-	private void BindStructure() {
-		_conductivity = BindProperty( _conductivities );
-		_capacity = BindProperty( _capacities );
-		_emissivity = BindProperty( _emissivities );
-		_absorptivity = BindProperty( _absorptivities );
-		_vacuum = _layers.Add( _compiled.CreateVacuumLayer() );
+	private (
+		IGridLayer<float> Conductivity,
+		IGridLayer<float> Capacity,
+		IGridLayer<float> Emissivity,
+		IGridLayer<float> Absorptivity,
+		IGridLayer<Direction> Vacuum
+	) BindStructure(
+		OwnedGridLayers<TCell> layers
+	) {
+		return (
+			BindProperty( layers, _conductivities ),
+			BindProperty( layers, _capacities ),
+			BindProperty( layers, _emissivities ),
+			BindProperty( layers, _absorptivities ),
+			layers.Add( _compiled.CreateVacuumLayer() )
+		);
 	}
 
 	private IGridLayer<float> BindProperty(
+		OwnedGridLayers<TCell> layers,
 		float[] values
 	) {
-		return _layers.Add( _compiled.Bind<float, MaterialPropertyBinding<TCell, TStrategy>>( new MaterialPropertyBinding<TCell, TStrategy>( _strategy, values ) ) );
+		return layers.Add( _compiled.Bind<float, MaterialPropertyBinding<TCell, TStrategy>>( new MaterialPropertyBinding<TCell, TStrategy>( _strategy, values ) ) );
 	}
 
 	// Every non-empty chunk writes every cell of temperatureNext, so the layers can be swapped

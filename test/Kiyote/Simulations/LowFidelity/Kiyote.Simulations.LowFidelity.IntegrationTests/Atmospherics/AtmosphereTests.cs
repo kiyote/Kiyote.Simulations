@@ -1,4 +1,5 @@
 using Kiyote.Buffers.ChunkedGrids;
+using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.IntegrationTests;
 using Microsoft.Extensions.DependencyInjection;
@@ -156,9 +157,10 @@ internal sealed class AtmosphereTests {
 	}
 
 	[Test]
-	public void Frames_CellAdded_IsPublished() {
+	public void Frames_CellAddedAndInvalidated_IsPublished() {
 		GasIndex nitrogen = _atmosphere.Gases.GetIndex( "N2" );
 		Assert.That( _assembly.TryAddCell( _placement, 25, 5, Floor ), Is.True );
+		_atmosphere.InvalidateTopology( new Rect( 25, 5, 1, 1 ) );
 		_atmosphere.AddGas( 25, 5, nitrogen, 10.0f );
 
 		_ = _atmosphere.Update( Frame );

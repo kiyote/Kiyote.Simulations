@@ -37,6 +37,33 @@ For live cell additions/removals and relevant permeability/material changes, cal
 Invalidate the combined coordinator when using the combined simulation.
 If an edit needs current source-cell values, commit before making that edit.
 
+### Live edits and metadata
+
+- Invalidate after every successful `TryAddCell` or `TryRemoveCell`, including edits
+  inside an existing chunk and removing the last occupied cell. These edits keep
+  the compilation live; layout version is not an occupancy revision.
+- Changes to an existing source cell's permeability or material also need
+  invalidation. Bound property layers do not automatically re-extract those
+  changes. Invalidation does not re-extract or commit gas, condensate or
+  temperature; use the simulation's state-edit methods for physical inputs.
+- Areas use **assembly coordinates**, not source-local coordinates. Include every
+  changed cell; connectivity refresh includes its one-cell neighbour ring,
+  diagonals and placement seams. Empty areas do nothing. A parameterless
+  invalidation supersedes queued areas.
+- Metadata refresh is deferred until the next `Update`, even if elapsed time is
+  zero. A zero-step update refreshes pressure/wind and publishes edited occupancy
+  without advancing physics. Pipe momentum on newly blocked neighbour faces is
+  discarded; unchanged open pipes and physical cell values are retained.
+- Connectivity can refresh locally. Vacuum and material/permeability properties
+  currently rebuild fully, as do affected solar exposure and combined convection
+  descriptors. Chunk-indexed work/publication tracking grows with the live
+  compilation. Rebuild allocations are outside unchanged-topology steady state.
+- The same explicit invalidation contract applies to frame topology. Do not rely
+  on automatic discovery of edits or use layout version to decide whether to
+  invalidate. Previously acquired leases remain unchanged.
+
+### Structural edits
+
 Attaching/detaching a source is different: commit while the compilation is live,
 dispose simulations and then their compilation, edit the assembly, and create a
 new compilation and simulations. A stale simulation rejects updates; it never
@@ -98,3 +125,9 @@ the disposed original simulation is not revived. Construction removes its
 partially registered simulation layers. The replacement compilation remains
 caller-owned: retry construction after correcting the problem, or dispose it.
 Do not fall back silently to old layers or a partially initialized simulation.
+
+Metadata extraction failures also propagate. Temporary replacement layers are
+cleaned up, existing registrations remain owned, and failed refresh work stays
+pending. Correct the cause and retry metadata refresh with `Update(TimeSpan.Zero)`;
+do not silently proceed after a failed update. Successfully completed work is not
+rolled back.

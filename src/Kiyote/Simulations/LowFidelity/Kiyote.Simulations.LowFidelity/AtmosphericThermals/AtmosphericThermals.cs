@@ -94,12 +94,17 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	void IAtmosphericThermals.InvalidateTopology(
 		Rect area
 	) {
+		ObjectDisposedException.ThrowIf( _disposed, this );
+		if( area.IsEmpty ) {
+			return;
+		}
 		_atmosphere.InvalidateTopology( area );
 		_thermal.InvalidateTopology( area );
 		_topologyChanged = true;
 	}
 
 	void IAtmosphericThermals.InvalidateTopology() {
+		ObjectDisposedException.ThrowIf( _disposed, this );
 		_atmosphere.InvalidateTopology();
 		_thermal.InvalidateTopology();
 		_topologyChanged = true;
@@ -115,7 +120,7 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	}
 
 	// Pairs every gas cell (occupied and permeable) with its own floor and each adjacent wall
-	// (occupied and impermeable). Only changes with the topology.
+	// (occupied and impermeable). Refresh after occupancy, permeability or material invalidation.
 	private void BuildLinks() {
 		using OwnedGridLayers<TCell> layers = new OwnedGridLayers<TCell>( _compiled, ChunkSize );
 		IGridLayer<bool> permeable = layers.Add( _compiled.Bind<bool, PermeabilityBinding<TCell, TAtmosphereStrategy>>( new PermeabilityBinding<TCell, TAtmosphereStrategy>( _atmosphereStrategy ) ) );

@@ -46,6 +46,18 @@ internal sealed class OwnedGridLayers<TCell> : IDisposable {
 		_ = _layers.Remove( layer );
 	}
 
+	public void TransferTo(
+		OwnedGridLayers<TCell> destination
+	) {
+		EnsureUsable();
+		destination.EnsureUsable();
+		if( ReferenceEquals( this, destination ) || !ReferenceEquals( _compiled, destination._compiled ) ) {
+			throw new ArgumentException( "Layers must transfer to a different tracker for the same compilation.", nameof( destination ) );
+		}
+		destination._layers.AddRange( _layers );
+		_layers.Clear();
+	}
+
 	public void Dispose() {
 		if( _disposed ) {
 			return;

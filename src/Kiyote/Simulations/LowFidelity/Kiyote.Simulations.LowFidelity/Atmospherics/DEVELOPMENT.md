@@ -86,11 +86,13 @@ Diagonals are skipped: they double the cost and pipes already spread isotropical
 
 - The atmosphere borrows the caller's `ICompiledGridAssembly<TCell>` with 32-cell chunks and owns only the layers it registers. The combined simulation shares that same compilation with the structure thermal simulation and exposes lifecycle-free child state views.
 - Gas, temperature and condensate layers are **bound** to the cells through `TStrategy`. The caller invokes `compiled.Commit()` to write dirty chunks back into the cells before saving or edits that need up-to-date cell values. Update, invalidation and disposal never implicitly commit.
-- Flows are not persisted; they rebuild within a few steps.
-- `InvalidateTopology( area )` rebuilds connectivity for an area (door, breach, new tile); `InvalidateTopology()` rebuilds everything. Large areas fall back to a full rebuild.
+- Flows are not persisted; they rebuild within a few steps. Invalidation cancels momentum on blocked faces but preserves it on unchanged open faces.
+- After every successful live occupancy edit or source permeability change, call `InvalidateTopology( area )` with all changed cells in assembly coordinates, or `InvalidateTopology()` to rebuild everything. Empty areas do nothing; a full invalidation supersedes queued areas. Large areas fall back to a full connectivity rebuild. Vacuum and permeability snapshots currently rebuild fully; local connectivity refresh includes the one-cell ring, diagonals and placement seams.
 - Individual cell additions/removals update the live compilation; invalidate the affected topology before updating. Attach/detach makes the compilation stale: commit first, dispose simulations and then the compilation, edit, compile and recreate. A stale Update throws rather than attempting a rescue commit. Reapply runtime options and switch readers to the replacement frame provider.
 - Dispose a simulation before its borrowed compilation. Simulation disposal removes only its own layers, leaves other simulations and caller layers intact, and is idempotent. Disposing the compilation early is a caller error, not a recovery path.
 - All caller changes happen **between** `Update` calls; they are stored and nothing is recalculated until the next `Update`.
+- Metadata invalidation wakes affected chunks and marks derived pressure/wind for publication, including on `Update(TimeSpan.Zero)`. It does not rebind physical quantities. Layout version cannot detect occupancy edits inside existing chunks. Frame topology follows the same explicit caller invalidation contract, not an automatic discovery guarantee.
+- Replacement metadata is staged before old registrations are removed. Failed extraction cleans temporary layers and leaves refresh work pending for explicit retry. Partial connectivity recalculation may have occurred; no physics step runs in that atmosphere update until preparation succeeds.
 
 ## Time stepping
 

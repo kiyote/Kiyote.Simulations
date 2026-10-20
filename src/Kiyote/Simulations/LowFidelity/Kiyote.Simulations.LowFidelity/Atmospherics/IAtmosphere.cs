@@ -10,6 +10,8 @@ public interface IAtmosphere : IAtmosphereState, IDisposable {
 		TimeSpan elapsed
 	);
 
+	// Required after live occupancy or permeability edits, before Update; use assembly coordinates.
+	// Empty areas do nothing. The parameterless overload refreshes everything.
 	void InvalidateTopology(
 		Rect area
 	);
