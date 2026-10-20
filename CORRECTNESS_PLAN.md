@@ -147,7 +147,7 @@ to publish packages, push repositories, or rewrite their unrelated changes.
 
 - Baseline: migration, benchmark tables, and this plan committed as `d4a463c`;
   208 tests passed, solution build had no warnings/errors.
-- W1: completed. Factories borrow the caller's compilation; persistence is
+- W1: completed in `2994f0d`. Factories borrow the caller's compilation; persistence is
   explicit; children expose lifecycle-free state views; owned and temporary layers
   are cleaned up deterministically. Internal prepare/step/publication hooks are
   available without changing coupled timing yet.
@@ -156,7 +156,15 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   updates allocate zero measured bytes for atmosphere, thermal, and combined
   simulations in both configurations. Ownership tracking allocates only during
   construction/rebuild, not steady-state stepping.
-- W2-W9: not started. Coupled scheduling/final-publication corrections and optional
+- W2: completed. Added 26 structural-lifecycle cases covering retained/new/detached
+  cells, empty replacements, detached layer references, transient flow/timing/
+  exchange resets, frame-provider replacement and held leases, runtime option
+  reapplication, and explicit commit/construction retries. Expanded the caller
+  lifecycle and failure-handling documentation; no runtime machinery was needed.
+- W2 validation: solution builds without warnings/errors; all 274 tests pass.
+  All 66 ownership/lifecycle regressions also pass in Release, including the
+  existing zero-allocation checks.
+- W3-W9: not started. Coupled scheduling/final-publication corrections and optional
   performance experiments remain separate work packages.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation

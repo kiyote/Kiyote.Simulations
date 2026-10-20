@@ -1,3 +1,5 @@
+using Kiyote.Buffers.ChunkedGrids;
+using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
@@ -16,19 +18,21 @@ internal sealed class CompilationOwnershipTests {
 	private DenseGridSource<Cell> _source;
 	private IGridAssembly<Cell> _assembly;
 	private ICompiledGridAssembly<Cell> _compiled;
+	private PlacementId _placement;
 	private Strategy _strategy;
+	private Settings _settings;
 
 	[SetUp]
 	public void SetUp() {
 		IGasRegistry gases = ( (IGasRegistryBuilder)new GasRegistryBuilder( [new GasSource()] ) ).Build();
 		IMaterialRegistry materials = ( (IMaterialRegistryBuilder)new MaterialRegistryBuilder( [new MaterialSource()] ) ).Build();
-		Settings settings = new Settings();
+		_settings = new Settings();
 		_services = new ServiceCollection()
 			.AddSingleton( gases )
 			.AddSingleton( materials )
-			.AddSingleton<IAtmosphericsSettings>( settings )
-			.AddSingleton<IThermalsSettings>( settings )
-			.AddSingleton<IAtmosphericThermalsSettings>( settings )
+			.AddSingleton<IAtmosphericsSettings>( _settings )
+			.AddSingleton<IThermalsSettings>( _settings )
+			.AddSingleton<IAtmosphericThermalsSettings>( _settings )
 			.AddSingleton<IConnectivityBuilder, ConnectivityBuilder>()
 			.AddLowFidelitySimulations()
 			.BuildServiceProvider();
@@ -39,7 +43,9 @@ internal sealed class CompilationOwnershipTests {
 			}
 		}
 		_assembly = new GridAssembly<Cell>();
-		Assert.That( _assembly.TryAttach( _source, 0, 0 ).Succeeded, Is.True );
+		AttachResult attached = _assembly.TryAttach( _source, 0, 0 );
+		Assert.That( attached.Succeeded, Is.True );
+		_placement = attached.Placement;
 		_compiled = new GridCompiler().Compile( _assembly, 32 );
 		_strategy = new Strategy( materials.GetIndex( "hull" ) );
 	}
@@ -318,16 +324,373 @@ internal sealed class CompilationOwnershipTests {
 		Assert.That( allocated, Is.Zero );
 	}
 
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_SourceAttached_PreservesCommittedStateAndLoadsNewCells(
+		SimulationKind kind
+	) {
+		using IDisposable original = Create( kind, _compiled );
+		AddInputs( original );
+		_compiled.Commit();
+		Cell retained = _source.GetCell( 1, 1 );
+		original.Dispose();
+		_compiled.Dispose();
+		Cell incoming = new Cell( 4.0f, 5.0f, 310.0f, 210.0f );
+		_ = AttachSource( incoming, -64, 32 );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+
+		using IDisposable replacement = Create( kind, _compiled );
+
+		AssertState( replacement, retained, 1, 1 );
+		AssertState( replacement, incoming, -64, 32 );
+		Assert.That( _compiled.IsStale, Is.False );
+	}
+
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_SourceDetached_PersistsDetachedValuesAndRemovesPresence(
+		SimulationKind kind
+	) {
+		_compiled.Dispose();
+		(DenseGridSource<Cell> detached, PlacementId placement) = AttachSource( Initial );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+		using IDisposable original = Create( kind, _compiled );
+		AddInputs( original );
+		AddInputs( original, 64, 0 );
+		_compiled.Commit();
+		Cell retained = _source.GetCell( 1, 1 );
+		Cell detachedValues = detached.GetCell( 0, 0 );
+		Assert.That( detachedValues, Is.Not.EqualTo( Initial ) );
+		original.Dispose();
+		_compiled.Dispose();
+		Assert.That( _assembly.TryDetach( placement ), Is.True );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+
+		using IDisposable replacement = Create( kind, _compiled );
+
+		AssertState( replacement, retained, 1, 1 );
+		Assert.That( _compiled.ChunkLayout.IsPopulated( 64, 0 ), Is.False );
+		Assert.That( detached.GetCell( 0, 0 ), Is.EqualTo( detachedValues ) );
+		IGridAssembly<Cell> otherAssembly = new GridAssembly<Cell>();
+		Assert.That( otherAssembly.TryAttach( detached, 0, 0 ).Succeeded, Is.True );
+	}
+
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_AllSourcesDetached_CreatesOperationalEmptySimulation(
+		SimulationKind kind
+	) {
+		using IDisposable original = Create( kind, _compiled );
+		AddInputs( original );
+		_compiled.Commit();
+		Cell retained = _source.GetCell( 1, 1 );
+		original.Dispose();
+		_compiled.Dispose();
+		Assert.That( _assembly.TryDetach( _placement ), Is.True );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+
+		using IDisposable replacement = Create( kind, _compiled );
+		_ = Update( replacement, Step );
+
+		Assert.That( _compiled.ChunkLayout.ChunkCount, Is.Zero );
+		Assert.That( _source.GetCell( 1, 1 ), Is.EqualTo( retained ) );
+		IAtmosphereState atmosphere = GetAtmosphere( replacement );
+		if( atmosphere is not null ) {
+			using TripleBufferedLease<float> frame = atmosphere.Frames.AcquirePressure();
+			Assert.That( frame.IsPopulated( 1, 1 ), Is.False );
+		}
+	}
+
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_RetainedLayerReference_RemainsDetachedFromReplacement(
+		SimulationKind kind
+	) {
+		using IDisposable original = Create( kind, _compiled );
+		IGridLayer<float> previous = GetAtmosphere( original )?.Temperature ?? GetThermal( original ).Temperature;
+		float value = previous[1, 1];
+		_compiled.Commit();
+		original.Dispose();
+		_compiled.Dispose();
+		_ = AttachSource( Initial );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+		using IDisposable replacement = Create( kind, _compiled );
+		IAtmosphereState atmosphere = GetAtmosphere( replacement );
+		IGridLayer<float> current;
+		if( atmosphere is not null ) {
+			_ = atmosphere.AddEnergy( 1, 1, 100.0f );
+			current = atmosphere.Temperature;
+		} else {
+			IThermalState thermal = GetThermal( replacement );
+			thermal.AddEnergy( 1, 1, 1000.0f );
+			current = thermal.Temperature;
+		}
+
+		_compiled.Commit();
+
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( current, Is.Not.SameAs( previous ) );
+			Assert.That( current.Layout, Is.SameAs( _compiled.ChunkLayout ) );
+			Assert.That( previous.Layout, Is.Not.SameAs( current.Layout ) );
+			Assert.That( current[1, 1], Is.GreaterThan( value ) );
+			Assert.That( previous[1, 1], Is.EqualTo( value ) );
+		}
+	}
+
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_FractionalElapsedTime_DoesNotCarryIntoReplacement(
+		SimulationKind kind
+	) {
+		using IDisposable original = Create( kind, _compiled );
+		Assert.That( Update( original, TimeSpan.FromMilliseconds( 50 ) ), Is.Zero );
+		_compiled.Commit();
+		original.Dispose();
+		_compiled.Dispose();
+		_ = AttachSource( Initial );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+		using IDisposable replacement = Create( kind, _compiled );
+
+		int first = Update( replacement, TimeSpan.FromMilliseconds( 50 ) );
+		int second = Update( replacement, TimeSpan.FromMilliseconds( 50 ) );
+
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( first, Is.Zero );
+			Assert.That( second, Is.EqualTo( 1 ) );
+		}
+	}
+
+	[Test]
+	public void Recreate_PendingHeatExchange_RestartsExchangeCadence() {
+		_settings.ExchangeInterval = 0.3f;
+		using IDisposable original = Create( SimulationKind.Combined, _compiled );
+		Assert.That( Update( original, Step ), Is.Zero );
+		_compiled.Commit();
+		original.Dispose();
+		_compiled.Dispose();
+		_ = AttachSource( Initial );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+		using IDisposable replacement = Create( SimulationKind.Combined, _compiled );
+
+		int first = Update( replacement, Step );
+		int second = Update( replacement, Step );
+		int third = Update( replacement, Step );
+
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( first, Is.Zero );
+			Assert.That( second, Is.Zero );
+			Assert.That( third, Is.EqualTo( 1 ) );
+		}
+	}
+
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_AtmosphereFrames_ResetsTransientStateAndPreservesOldLease(
+		SimulationKind kind
+	) {
+		using IDisposable original = Create( kind, _compiled );
+		AddInputs( original );
+		_ = Update( original, Step );
+		IAtmosphereState previous = GetAtmosphere( original );
+		IAtmosphereFrames previousFrames = previous.Frames;
+		GasIndex gas = previous.Gases.GetIndex( "N2" );
+		using TripleBufferedLease<float> held = previousFrames.AcquireGas( gas );
+		float[] snapshot = Snapshot( held );
+		Assert.That( previousFrames.StepCount, Is.EqualTo( 1 ) );
+		Assert.That( previous.Vented, Is.GreaterThan( 0.0f ) );
+		Assert.That( MathF.Abs( previous.WindX[0, 1] ), Is.GreaterThan( 0.0f ) );
+		_compiled.Commit();
+		original.Dispose();
+		_compiled.Dispose();
+		_ = AttachSource( Initial );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+
+		using IDisposable replacement = Create( kind, _compiled );
+		IAtmosphereState current = GetAtmosphere( replacement );
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( current.Frames, Is.Not.SameAs( previousFrames ) );
+			Assert.That( current.Frames.StepCount, Is.Zero );
+			Assert.That( current.Frames.Vented, Is.Zero );
+			Assert.That( current.Vented, Is.Zero );
+			Assert.That( current.WindX[0, 1], Is.Zero );
+			Assert.That( current.WindY[0, 1], Is.Zero );
+			Assert.That( current.Pressure[1, 1], Is.EqualTo(
+				current.GetTotalGas( 1, 1 ) * current.Temperature[1, 1] / AtmosphereSimd.ReferenceTemperature
+			).Within( 0.00001f ) );
+		}
+		_ = Update( replacement, Step );
+		_ = Update( replacement, Step );
+
+		using TripleBufferedLease<float> fresh = current.Frames.AcquireGas( gas );
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( current.Frames.StepCount, Is.EqualTo( 2 ) );
+			Assert.That( previousFrames.StepCount, Is.EqualTo( 1 ) );
+			Assert.That( Snapshot( held ), Is.EqualTo( snapshot ) );
+			Assert.That( held.IsPopulated( 64, 0 ), Is.False );
+			Assert.That( fresh.IsPopulated( 64, 0 ), Is.True );
+		}
+	}
+
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_RuntimeSunDirection_RequiresExplicitReapplication(
+		SimulationKind kind
+	) {
+		using IDisposable original = Create( kind, _compiled );
+		Vector direction = new Vector( 1.0f, -1.0f );
+		GetThermal( original ).SunDirection = direction;
+		_compiled.Commit();
+		original.Dispose();
+		_compiled.Dispose();
+		_ = AttachSource( Initial );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+		using IDisposable replacement = Create( kind, _compiled );
+		IThermalState thermal = GetThermal( replacement );
+		Assert.That( thermal.SunDirection, Is.EqualTo( new Vector() ) );
+
+		thermal.SunDirection = direction;
+		_ = Update( replacement, TimeSpan.Zero );
+
+		Assert.That( thermal.SunDirection, Is.EqualTo( direction ) );
+	}
+
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Commit_BindingThrows_KeepsSimulationUsableForExplicitRetry(
+		SimulationKind kind
+	) {
+		CommitFailure failure = new CommitFailure();
+		Strategy strategy = new Strategy( _strategy.Material, commitFailure: failure );
+		using IDisposable simulation = Create( kind, _compiled, strategy );
+		AddInputs( simulation );
+		IAtmosphereState atmosphere = GetAtmosphere( simulation );
+		IGridLayer<float> dirty = atmosphere is not null
+			? atmosphere.GetGas( atmosphere.Gases.GetIndex( "N2" ) )
+			: GetThermal( simulation ).Temperature;
+		Assert.That( _compiled.ChunkLayout.TryLocate( 1, 1, out int chunk, out _ ), Is.True );
+		int layerCount = _compiled.Layers.Count;
+
+		Assert.Throws<InvalidOperationException>( () => _compiled.Commit() );
+
+		Assert.That( dirty.IsDirty( chunk ), Is.True );
+		Assert.That( _compiled.IsStale, Is.False );
+		Assert.That( _compiled.Layers.Count, Is.EqualTo( layerCount ) );
+		Assert.DoesNotThrow( () => Update( simulation, TimeSpan.Zero ) );
+		failure.Enabled = false;
+		_compiled.Commit();
+
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( dirty.IsDirty( chunk ), Is.False );
+			Assert.That( _source.GetCell( 1, 1 ).Gas, Is.EqualTo( kind == SimulationKind.Thermal ? Initial.Gas : Initial.Gas + 1.0f ) );
+			Assert.That( _source.GetCell( 1, 1 ).StructureTemperature, Is.EqualTo( kind == SimulationKind.Atmosphere ? Initial.StructureTemperature : Initial.StructureTemperature + 1.0f ) );
+		}
+	}
+
+	[TestCase( SimulationKind.Atmosphere )]
+	[TestCase( SimulationKind.Thermal )]
+	[TestCase( SimulationKind.Combined )]
+	public void Recreate_ReplacementBindingThrows_KeepsEditedAssemblyForExplicitRetry(
+		SimulationKind kind
+	) {
+		using IDisposable original = Create( kind, _compiled );
+		AddInputs( original );
+		_compiled.Commit();
+		Cell retained = _source.GetCell( 1, 1 );
+		original.Dispose();
+		_compiled.Dispose();
+		_ = AttachSource( Initial );
+		_compiled = new GridCompiler().Compile( _assembly, 32 );
+		Strategy failing = new Strategy(
+			_strategy.Material,
+			failAtmosphereTemperature: kind == SimulationKind.Atmosphere,
+			failMaterial: kind != SimulationKind.Atmosphere
+		);
+
+		Assert.Throws<InvalidOperationException>( () => Create( kind, _compiled, failing ) );
+
+		Assert.That( _compiled.Layers, Is.Empty );
+		Assert.That( _compiled.IsStale, Is.False );
+		Assert.That( _compiled.ChunkLayout.IsPopulated( 64, 0 ), Is.True );
+		Assert.That( _source.GetCell( 1, 1 ), Is.EqualTo( retained ) );
+		using IDisposable replacement = Create( kind, _compiled );
+		AssertState( replacement, retained, 1, 1 );
+		AssertState( replacement, Initial, 64, 0 );
+		Assert.DoesNotThrow( () => Update( replacement, TimeSpan.Zero ) );
+	}
+
 	private IDisposable Create(
 		SimulationKind kind,
-		ICompiledGridAssembly<Cell> compiled
+		ICompiledGridAssembly<Cell> compiled,
+		Strategy? strategy = null
 	) {
+		Strategy selected = strategy ?? _strategy;
 		return kind switch {
-			SimulationKind.Atmosphere => _services.GetRequiredService<IGridAtmospherics>().Create( compiled, _strategy ),
-			SimulationKind.Thermal => _services.GetRequiredService<IGridThermals>().Create( compiled, _strategy ),
-			SimulationKind.Combined => _services.GetRequiredService<IGridAtmosphericThermals>().Create( compiled, _strategy, _strategy ),
+			SimulationKind.Atmosphere => _services.GetRequiredService<IGridAtmospherics>().Create( compiled, selected ),
+			SimulationKind.Thermal => _services.GetRequiredService<IGridThermals>().Create( compiled, selected ),
+			SimulationKind.Combined => _services.GetRequiredService<IGridAtmosphericThermals>().Create( compiled, selected, selected ),
 			_ => throw new ArgumentOutOfRangeException( nameof( kind ) )
 		};
+	}
+
+	private (DenseGridSource<Cell> Source, PlacementId Placement) AttachSource(
+		Cell cell,
+		int column = 64,
+		int row = 0
+	) {
+		DenseGridSource<Cell> source = new DenseGridSource<Cell>( 1, 1 );
+		Assert.That( source.TrySetCell( 0, 0, cell ), Is.True );
+		AttachResult attached = _assembly.TryAttach( source, column, row );
+		Assert.That( attached.Succeeded, Is.True );
+		return (source, attached.Placement);
+	}
+
+	private static IAtmosphereState GetAtmosphere(
+		IDisposable simulation
+	) {
+		return simulation is IAtmosphericThermals combined ? combined.Atmosphere : simulation as IAtmosphere;
+	}
+
+	private static IThermalState GetThermal(
+		IDisposable simulation
+	) {
+		return simulation is IAtmosphericThermals combined ? combined.Thermal : simulation as IThermal;
+	}
+
+	private static void AssertState(
+		IDisposable simulation,
+		Cell expected,
+		int column,
+		int row
+	) {
+		IAtmosphereState atmosphere = GetAtmosphere( simulation );
+		IThermalState thermal = GetThermal( simulation );
+		using( Assert.EnterMultipleScope() ) {
+			if( atmosphere is not null ) {
+				GasIndex gas = atmosphere.Gases.GetIndex( "N2" );
+				Assert.That( atmosphere.GetGas( gas )[column, row], Is.EqualTo( expected.Gas ) );
+				Assert.That( atmosphere.GetCondensate( gas )[column, row], Is.EqualTo( expected.Condensate ) );
+				Assert.That( atmosphere.Temperature[column, row], Is.EqualTo( expected.GasTemperature ) );
+			}
+			if( thermal is not null ) {
+				Assert.That( thermal.Temperature[column, row], Is.EqualTo( expected.StructureTemperature ) );
+			}
+		}
+	}
+
+	private static float[] Snapshot(
+		TripleBufferedLease<float> lease
+	) {
+		List<float> values = [];
+		foreach( GridChunk<float> chunk in lease.EnumerateChunks() ) {
+			values.AddRange( chunk.Values );
+		}
+		return [.. values];
 	}
 
 	private void InvalidateCompilation() {
@@ -338,30 +701,28 @@ internal sealed class CompilationOwnershipTests {
 	}
 
 	private static void AddInputs(
-		IDisposable simulation
+		IDisposable simulation,
+		int column = 1,
+		int row = 1
 	) {
-		IAtmosphereState atmosphere = simulation is IAtmosphericThermals combined ? combined.Atmosphere : simulation as IAtmosphere;
+		IAtmosphereState atmosphere = GetAtmosphere( simulation );
 		if( atmosphere is not null ) {
-			atmosphere.AddGas( 1, 1, atmosphere.Gases.GetIndex( "N2" ), 1.0f );
+			atmosphere.AddGas( column, row, atmosphere.Gases.GetIndex( "N2" ), 1.0f );
 		}
-		IThermalState thermal = simulation is IAtmosphericThermals coupled ? coupled.Thermal : simulation as IThermal;
-		thermal?.AddEnergy( 1, 1, 1000.0f );
+		GetThermal( simulation )?.AddEnergy( column, row, 1000.0f );
 	}
 
-	private static void Update(
+	private static int Update(
 		IDisposable simulation,
 		TimeSpan elapsed
 	) {
 		switch( simulation ) {
 			case IAtmosphere atmosphere:
-				_ = atmosphere.Update( elapsed );
-				break;
+				return atmosphere.Update( elapsed );
 			case IThermal thermal:
-				_ = thermal.Update( elapsed );
-				break;
+				return thermal.Update( elapsed );
 			case IAtmosphericThermals combined:
-				_ = combined.Update( elapsed );
-				break;
+				return combined.Update( elapsed );
 			default:
 				throw new ArgumentException( "Unknown simulation.", nameof( simulation ) );
 		}
@@ -403,30 +764,39 @@ internal sealed class CompilationOwnershipTests {
 		private readonly bool _failAtmosphereTemperature;
 		private readonly bool _failMaterial;
 		private readonly MaterialReads _materialReads;
+		private readonly CommitFailure _commitFailure;
 
 		public Strategy(
 			MaterialIndex material,
 			bool failAtmosphereTemperature = false,
 			bool failMaterial = false,
-			MaterialReads materialReads = null
+			MaterialReads materialReads = null,
+			CommitFailure commitFailure = null
 		) {
 			Material = material;
 			_failAtmosphereTemperature = failAtmosphereTemperature;
 			_failMaterial = failMaterial;
 			_materialReads = materialReads;
+			_commitFailure = commitFailure;
 		}
 
 		public MaterialIndex Material { get; }
 
 		float IAtmosphereCellStrategy<Cell>.GetGas( in Cell cell, GasIndex gas ) => cell.Gas;
-		void IAtmosphereCellStrategy<Cell>.SetGas( ref Cell cell, GasIndex gas, float amount ) => cell = cell with { Gas = amount };
+		void IAtmosphereCellStrategy<Cell>.SetGas( ref Cell cell, GasIndex gas, float amount ) {
+			_commitFailure?.ThrowIfEnabled();
+			cell = cell with { Gas = amount };
+		}
 		float IAtmosphereCellStrategy<Cell>.GetCondensate( in Cell cell, GasIndex gas ) => cell.Condensate;
 		void IAtmosphereCellStrategy<Cell>.SetCondensate( ref Cell cell, GasIndex gas, float amount ) => cell = cell with { Condensate = amount };
 		float IAtmosphereCellStrategy<Cell>.GetTemperature( in Cell cell ) => _failAtmosphereTemperature ? throw new InvalidOperationException( "Expected temperature binding failure." ) : cell.GasTemperature;
 		void IAtmosphereCellStrategy<Cell>.SetTemperature( ref Cell cell, float temperature ) => cell = cell with { GasTemperature = temperature };
 		bool IAtmosphereCellStrategy<Cell>.IsPermeable( in Cell cell ) => true;
 		float IThermalCellStrategy<Cell>.GetTemperature( in Cell cell ) => cell.StructureTemperature;
-		void IThermalCellStrategy<Cell>.SetTemperature( ref Cell cell, float temperature ) => cell = cell with { StructureTemperature = temperature };
+		void IThermalCellStrategy<Cell>.SetTemperature( ref Cell cell, float temperature ) {
+			_commitFailure?.ThrowIfEnabled();
+			cell = cell with { StructureTemperature = temperature };
+		}
 
 		MaterialIndex IThermalCellStrategy<Cell>.GetMaterial(
 			in Cell cell
@@ -440,6 +810,16 @@ internal sealed class CompilationOwnershipTests {
 
 	private sealed class MaterialReads {
 		public int Remaining { get; set; }
+	}
+
+	private sealed class CommitFailure {
+		public bool Enabled { get; set; } = true;
+
+		public void ThrowIfEnabled() {
+			if( Enabled ) {
+				throw new InvalidOperationException( "Expected commit failure." );
+			}
+		}
 	}
 
 	private sealed class GasSource : IGasDefinitionSource {
@@ -465,7 +845,7 @@ internal sealed class CompilationOwnershipTests {
 		public float StefanBoltzmann => 0.0f;
 		public float SpaceTemperature => 2.7f;
 		public float SolarFlux => 0.0f;
-		public float ExchangeInterval => 0.1f;
+		public float ExchangeInterval { get; set; } = 0.1f;
 	}
 
 }
