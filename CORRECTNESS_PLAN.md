@@ -3,7 +3,9 @@
 ## Status and purpose
 
 Implementation-ready plan, decisions resolved on 2026-10-20.
-Production implementation has not started; this task changes documentation only.
+Production implementation has started, one validated and committed work package at
+a time. The completed Geometry migration was validated with 208 passing tests and
+committed as `d4a463c` before planned implementation began.
 The approved decisions below govern the work. The dependency-publication gate is
 an explicit future handoff, not an unresolved design choice.
 
@@ -141,6 +143,22 @@ to publish packages, push repositories, or rewrite their unrelated changes.
 
 ## Work packages
 
+### Implementation progress
+
+- Baseline: migration, benchmark tables, and this plan committed as `d4a463c`;
+  208 tests passed, solution build had no warnings/errors.
+- W1: completed. Factories borrow the caller's compilation; persistence is
+  explicit; children expose lifecycle-free state views; owned and temporary layers
+  are cleaned up deterministically. Internal prepare/step/publication hooks are
+  available without changing coupled timing yet.
+- W1 validation: full solution build has no warnings/errors; all 248 tests pass;
+  all 40 new ownership regressions also pass in Release. Warmed unchanged-topology
+  updates allocate zero measured bytes for atmosphere, thermal, and combined
+  simulations in both configurations. Ownership tracking allocates only during
+  construction/rebuild, not steady-state stepping.
+- W2-W9: not started. Coupled scheduling/final-publication corrections and optional
+  performance experiments remain separate work packages.
+
 ### W1. Establish one compilation owner and remove unsupported recompilation
 
 Priority: required correctness. Implement the approved D2/D3 design.
@@ -171,9 +189,12 @@ their factory interfaces/implementations, DI registrations, and consumers.
 6. Commit shared bound state once at explicit persistence/edit boundaries. Do not
    duplicate commits merely because the coordinator has two children.
 7. Handle partial construction and repeated disposal without leaving registered
-   layers or disposing the shared owner from a child. Cleanup after an already
-   stale/disposed owner must not attempt forbidden layer operations; the owner
-   disposes its detached storage.
+   layers or disposing the shared owner from a child. Cleanup of an already stale
+   compilation leaves its detached snapshot layers to their owner. Geometry does
+   not expose a public disposed-state query: disposing the caller's compilation
+   before its borrowers violates the required lifetime order and must surface
+   ObjectDisposedException, not be silently swallowed or require a new dependency
+   API solely for out-of-contract cleanup.
 8. Build convection descriptors with temporary property layers on the live owner,
    then remove those layers in deterministic cleanup, including failure paths.
    Repeated invalidation must not accumulate bound layers or stale descriptors.
@@ -478,10 +499,12 @@ Historical reference measurements (microseconds; not acceptance thresholds):
 1. Follow resolved D1-D10; there are no outstanding design questions. Pause at the
    D8 publication gate if an unpublished dependency API is needed.
 2. Re-establish current build/test and targeted benchmark baselines.
-3. Add correctness regressions, then implement W1-W3 and W9 as one coherent
-   ownership/invalidation/coordination change.
-4. Run affected LowFidelity unit/integration tests and capture the corrected-behavior
-   performance baseline before moving on.
+3. Implement and validate W1, then commit it before starting W2. Follow with
+   separately validated/committed W2, W3, and W9 changes in dependency order. W1
+   supplies internal stepping hooks but does not change coupled timing/publication.
+4. Run affected LowFidelity unit/integration tests at every boundary and the full
+   solution validation for public API changes. Capture the corrected-behavior
+   performance baseline after W3/W9, before optional optimizations.
 5. Evaluate W4-W7 independently so measurements can attribute changes. W5 does not
    require W4; W6 does not require W5. Evaluate W8 only when its prerequisites exist.
 6. Update all changed API consumers, XML comments, core README, and atmosphere

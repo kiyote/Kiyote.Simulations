@@ -14,6 +14,7 @@ internal sealed class AtmosphericThermalsTests {
 	private const float StructureTemperature = 200.0f;
 
 	private IAtmosphericThermals _simulation;
+	private ICompiledGridAssembly<TestCell> _compiled;
 
 	[SetUp]
 	public void SetUp() {
@@ -35,12 +36,12 @@ internal sealed class AtmosphericThermalsTests {
 			.AddSingleton<IAtmosphericsSettings, TestAtmosphericsSettings>()
 			.AddSingleton<IThermalsSettings, TestThermalsSettings>()
 			.AddSingleton<IAtmosphericThermalsSettings, TestAtmosphericThermalsSettings>()
-			.AddSingleton<IGridCompiler, GridCompiler>()
 			.AddSingleton<IConnectivityBuilder, ConnectivityBuilder>()
 			.AddLowFidelitySimulations()
 			.BuildServiceProvider();
+		_compiled = new GridCompiler().Compile( assembly, 32 );
 		_simulation = services.GetRequiredService<IGridAtmosphericThermals>().Create(
-			assembly,
+			_compiled,
 			new TestCellStrategy(),
 			new TestStrategy( materials.GetIndex( "hull" ) )
 		);
@@ -55,6 +56,7 @@ internal sealed class AtmosphericThermalsTests {
 	[TearDown]
 	public void TearDown() {
 		_simulation?.Dispose();
+		_compiled?.Dispose();
 	}
 
 	[Test]

@@ -7,12 +7,12 @@ namespace Kiyote.Simulations.LowFidelity.Thermals;
 internal sealed class Thermal<TCell, TStrategy> : IThermal
 	where TStrategy : struct, IThermalCellStrategy<TCell> {
 
-	private readonly IGridAssembly<TCell> _assembly;
+	private readonly ICompiledGridAssembly<TCell> _compiled;
+	private readonly OwnedGridLayers<TCell> _layers;
 	private readonly TStrategy _strategy;
 	private readonly IMaterialRegistry _materials;
 	private readonly IThermalsSettings _settings;
 	private readonly ISimulationClock _clock;
-	private readonly IGridCompiler _compiler;
 	private readonly IThermalConduction _conduction;
 	private readonly IThermalRadiation _radiation;
 	private readonly IThermalSolar _solar;
@@ -29,7 +29,6 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 	private float _accumulator;
 	private bool _disposed;
 
-	private ICompiledGridAssembly<TCell> _compiled;
 	private IGridLayer<float> _temperature;
 	private IGridLayer<float> _temperatureNext;
 	private IGridLayer<float> _conductivity;
@@ -40,22 +39,21 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 	private IGridLayer<Direction> _vacuum;
 
 	public Thermal(
-		IGridAssembly<TCell> assembly,
+		ICompiledGridAssembly<TCell> compiled,
 		TStrategy strategy,
 		IMaterialRegistry materials,
 		IThermalsSettings settings,
 		ISimulationClock clock,
-		IGridCompiler compiler,
 		IThermalConduction conduction,
 		IThermalRadiation radiation,
 		IThermalSolar solar
 	) {
-		_assembly = assembly;
+		_compiled = compiled;
+		_layers = new OwnedGridLayers<TCell>( compiled, ChunkSize );
 		_strategy = strategy;
 		_materials = materials;
 		_settings = settings;
 		_clock = clock;
-		_compiler = compiler;
 		_conduction = conduction;
 		_radiation = radiation;
 		_solar = solar;
@@ -66,14 +64,22 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_temperaturePadded = new float[PaddedArea];
 		_conductivityPadded = new float[PaddedArea];
 		_capacityPadded = new float[PaddedArea];
-		Compile();
+		bool initialized = false;
+		try {
+			BindLayers();
+			initialized = true;
+		} finally {
+			if( !initialized ) {
+				_layers.Dispose();
+			}
+		}
 	}
 
-	IMaterialRegistry IThermal.Materials => _materials;
+	IMaterialRegistry IThermalState.Materials => _materials;
 
-	IGridLayer<float> IThermal.Temperature => _temperature;
+	IGridLayer<float> IThermalState.Temperature => _temperature;
 
-	Vector IThermal.SunDirection {
+	Vector IThermalState.SunDirection {
 		get => _sunDirection;
 		set {
 			_sunDirection = value;
@@ -84,20 +90,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 	int IThermal.Update(
 		TimeSpan elapsed
 	) {
-		ObjectDisposedException.ThrowIf( _disposed, this );
-
-		if( _compiled.IsStale ) {
-			_compiled.Commit();
-			_compiled.Dispose();
-			Compile();
-		}
-		if( _topologyChanged ) {
-			RebuildStructure();
-		}
-		if( _solarStale ) {
-			_solar.Illuminate( _compiled.ChunkLayout, _sunDirection, _settings.SolarFlux, _absorptivity, _vacuum, _solarPower );
-			_solarStale = false;
-		}
+		PrepareUpdate();
 
 		float dt = _clock.FixedTimeStep;
 		_accumulator += (float)elapsed.TotalSeconds;
@@ -115,7 +108,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		return steps;
 	}
 
-	void IThermal.AddEnergy(
+	void IThermalState.AddEnergy(
 		int column,
 		int row,
 		float joules
@@ -133,18 +126,15 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_temperature.MarkDirty( chunk );
 	}
 
-	void IThermal.Commit() {
-		ObjectDisposedException.ThrowIf( _disposed, this );
-		_compiled.Commit();
-	}
-
 	void IThermal.InvalidateTopology(
 		Rect area
 	) {
+		ObjectDisposedException.ThrowIf( _disposed, this );
 		_topologyChanged = true;
 	}
 
 	void IThermal.InvalidateTopology() {
+		ObjectDisposedException.ThrowIf( _disposed, this );
 		_topologyChanged = true;
 	}
 
@@ -152,19 +142,30 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		if( _disposed ) {
 			return;
 		}
-		_compiled.Dispose();
+		_layers.Dispose();
 		_disposed = true;
 	}
 
+	internal void PrepareUpdate() {
+		ObjectDisposedException.ThrowIf( _disposed, this );
+		_layers.EnsureUsable();
+		if( _topologyChanged ) {
+			RebuildStructure();
+		}
+		if( _solarStale ) {
+			_solar.Illuminate( _compiled.ChunkLayout, _sunDirection, _settings.SolarFlux, _absorptivity, _vacuum, _solarPower );
+			_solarStale = false;
+		}
+	}
+
 	[System.Diagnostics.CodeAnalysis.MemberNotNull(
-		nameof( _compiled ), nameof( _temperature ), nameof( _temperatureNext ), nameof( _conductivity ),
+		nameof( _temperature ), nameof( _temperatureNext ), nameof( _conductivity ),
 		nameof( _capacity ), nameof( _emissivity ), nameof( _absorptivity ), nameof( _solarPower ), nameof( _vacuum )
 	)]
-	private void Compile() {
-		_compiled = _compiler.Compile( _assembly, ChunkSize );
-		_temperature = _compiled.Bind<float, ThermalTemperatureBinding<TCell, TStrategy>>( new ThermalTemperatureBinding<TCell, TStrategy>( _strategy ) );
-		_temperatureNext = _compiled.CreateLayer<float>();
-		_solarPower = _compiled.CreateLayer<float>();
+	private void BindLayers() {
+		_temperature = _layers.Add( _compiled.Bind<float, ThermalTemperatureBinding<TCell, TStrategy>>( new ThermalTemperatureBinding<TCell, TStrategy>( _strategy ) ) );
+		_temperatureNext = _layers.Add( _compiled.CreateLayer<float>() );
+		_solarPower = _layers.Add( _compiled.CreateLayer<float>() );
 		BindStructure();
 		_topologyChanged = false;
 		_solarStale = true;
@@ -172,12 +173,11 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 
 	// Material properties and vacuum faces only change with the topology.
 	private void RebuildStructure() {
-		_compiled.Commit();
-		_compiled.RemoveLayer( _conductivity );
-		_compiled.RemoveLayer( _capacity );
-		_compiled.RemoveLayer( _emissivity );
-		_compiled.RemoveLayer( _absorptivity );
-		_compiled.RemoveLayer( _vacuum );
+		_layers.Remove( _conductivity );
+		_layers.Remove( _capacity );
+		_layers.Remove( _emissivity );
+		_layers.Remove( _absorptivity );
+		_layers.Remove( _vacuum );
 		BindStructure();
 		_topologyChanged = false;
 		_solarStale = true;
@@ -191,18 +191,18 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		_capacity = BindProperty( _capacities );
 		_emissivity = BindProperty( _emissivities );
 		_absorptivity = BindProperty( _absorptivities );
-		_vacuum = _compiled.CreateVacuumLayer();
+		_vacuum = _layers.Add( _compiled.CreateVacuumLayer() );
 	}
 
 	private IGridLayer<float> BindProperty(
 		float[] values
 	) {
-		return _compiled.Bind<float, MaterialPropertyBinding<TCell, TStrategy>>( new MaterialPropertyBinding<TCell, TStrategy>( _strategy, values ) );
+		return _layers.Add( _compiled.Bind<float, MaterialPropertyBinding<TCell, TStrategy>>( new MaterialPropertyBinding<TCell, TStrategy>( _strategy, values ) ) );
 	}
 
 	// Every non-empty chunk writes every cell of temperatureNext, so the layers can be swapped
 	// rather than copied back. Empty chunks hold no cells, so their values never matter.
-	private void Step(
+	internal void Step(
 		float dt
 	) {
 		GridLayout layout = _compiled.ChunkLayout;

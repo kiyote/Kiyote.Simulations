@@ -15,6 +15,7 @@ public class ThermalBenchmarks {
 	private static readonly TimeSpan Step = TimeSpan.FromSeconds( FixedTimeStep );
 
 	private readonly IThermal _thermal;
+	private readonly ICompiledGridAssembly<Cell> _compiled;
 	private int _sunStep;
 
 	public ThermalBenchmarks() {
@@ -40,7 +41,8 @@ public class ThermalBenchmarks {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 
-		_thermal = thermals.Create( assembly, new CellStrategy( materials.GetIndex( "aluminium" ) ) );
+		_compiled = services.GetRequiredService<IGridCompiler>().Compile( assembly, 32 );
+		_thermal = thermals.Create( _compiled, new CellStrategy( materials.GetIndex( "aluminium" ) ) );
 		// Grid +Y is south, so north-east is (1, -1).
 		_thermal.SunDirection = new Vector( 1.0f, -1.0f );
 	}
@@ -65,6 +67,7 @@ public class ThermalBenchmarks {
 	[GlobalCleanup]
 	public void Cleanup() {
 		_thermal.Dispose();
+		_compiled.Dispose();
 	}
 
 	private readonly record struct Cell;

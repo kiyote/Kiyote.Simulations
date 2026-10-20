@@ -13,12 +13,12 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private static readonly int EastNeighbour = Direction.East.ToNeighbourIndex();
 	private static readonly int SouthNeighbour = Direction.South.ToNeighbourIndex();
 
-	private readonly IGridAssembly<TCell> _assembly;
+	private readonly ICompiledGridAssembly<TCell> _compiled;
+	private readonly OwnedGridLayers<TCell> _layers;
 	private readonly TStrategy _strategy;
 	private readonly IGasRegistry _gases;
 	private readonly IAtmosphericsSettings _settings;
 	private readonly ISimulationClock _clock;
-	private readonly IGridCompiler _compiler;
 	private readonly IConnectivityBuilder _connectivityBuilder;
 	private readonly IAtmospherePressure _pressureStage;
 	private readonly IAtmosphereAcceleration _acceleration;
@@ -47,7 +47,6 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private long _stepCount;
 	private bool _disposed;
 
-	private ICompiledGridAssembly<TCell> _compiled;
 	private IGridLayer<float>[] _gas;
 	private IGridLayer<float>[] _gasNext;
 	private IGridLayer<float>?[] _condensate;
@@ -69,12 +68,11 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private bool[] _publish;
 
 	public Atmosphere(
-		IGridAssembly<TCell> assembly,
+		ICompiledGridAssembly<TCell> compiled,
 		TStrategy strategy,
 		IGasRegistry gases,
 		IAtmosphericsSettings settings,
 		ISimulationClock clock,
-		IGridCompiler compiler,
 		IConnectivityBuilder connectivityBuilder,
 		IAtmospherePressure pressureStage,
 		IAtmosphereAcceleration acceleration,
@@ -84,12 +82,12 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		IAtmosphereCondensation condensation,
 		IAtmosphereWind wind
 	) {
-		_assembly = assembly;
+		_compiled = compiled;
+		_layers = new OwnedGridLayers<TCell>( compiled, ChunkSize );
 		_strategy = strategy;
 		_gases = gases;
 		_settings = settings;
 		_clock = clock;
-		_compiler = compiler;
 		_connectivityBuilder = connectivityBuilder;
 		_pressureStage = pressureStage;
 		_acceleration = acceleration;
@@ -117,36 +115,44 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		_active = [];
 		_processed = [];
 		_publish = [];
-		Compile();
+		bool initialized = false;
+		try {
+			BindLayers();
+			initialized = true;
+		} finally {
+			if( !initialized ) {
+				_layers.Dispose();
+			}
+		}
 	}
 
-	IGasRegistry IAtmosphere.Gases => _gases;
+	IGasRegistry IAtmosphereState.Gases => _gases;
 
-	IGridLayer<float> IAtmosphere.Pressure => _pressure;
+	IGridLayer<float> IAtmosphereState.Pressure => _pressure;
 
-	IGridLayer<float> IAtmosphere.Temperature => _temperature;
+	IGridLayer<float> IAtmosphereState.Temperature => _temperature;
 
-	IGridLayer<float> IAtmosphere.WindX => _windX;
+	IGridLayer<float> IAtmosphereState.WindX => _windX;
 
-	IGridLayer<float> IAtmosphere.WindY => _windY;
+	IGridLayer<float> IAtmosphereState.WindY => _windY;
 
-	float IAtmosphere.Vented => _vented;
+	float IAtmosphereState.Vented => _vented;
 
-	IAtmosphereFrames IAtmosphere.Frames => _frames;
+	IAtmosphereFrames IAtmosphereState.Frames => _frames;
 
-	IGridLayer<float> IAtmosphere.GetGas(
+	IGridLayer<float> IAtmosphereState.GetGas(
 		GasIndex gas
 	) {
 		return _gas[gas.Value];
 	}
 
-	IGridLayer<float> IAtmosphere.GetCondensate(
+	IGridLayer<float> IAtmosphereState.GetCondensate(
 		GasIndex gas
 	) {
 		return GetCondensateLayer( gas );
 	}
 
-	Vector IAtmosphere.GetWind(
+	Vector IAtmosphereState.GetWind(
 		int column,
 		int row
 	) {
@@ -159,15 +165,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	int IAtmosphere.Update(
 		TimeSpan elapsed
 	) {
-		ObjectDisposedException.ThrowIf( _disposed, this );
-
-		if( _compiled.IsStale ) {
-			_compiled.Commit();
-			_compiled.Dispose();
-			Compile();
-		}
-		EnsureChunkCapacity();
-		ApplyTopologyChanges();
+		PrepareUpdate();
 
 		float dt = _clock.FixedTimeStep;
 		_accumulator += (float)elapsed.TotalSeconds;
@@ -179,7 +177,6 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			_accumulator -= steps * dt;
 		}
 
-		_vented = 0.0f;
 		for( int i = 0; i < steps; i++ ) {
 			Step( dt );
 		}
@@ -188,22 +185,19 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		return steps;
 	}
 
-	void IAtmosphere.Commit() {
-		ObjectDisposedException.ThrowIf( _disposed, this );
-		_compiled.Commit();
-	}
-
 	void IAtmosphere.InvalidateTopology(
 		Rect area
 	) {
+		ObjectDisposedException.ThrowIf( _disposed, this );
 		_pendingAreas.Add( area );
 	}
 
 	void IAtmosphere.InvalidateTopology() {
+		ObjectDisposedException.ThrowIf( _disposed, this );
 		_pendingFullRebuild = true;
 	}
 
-	void IAtmosphere.AddGas(
+	void IAtmosphereState.AddGas(
 		int column,
 		int row,
 		GasIndex gas,
@@ -224,7 +218,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		Touch( chunk, _temperature );
 	}
 
-	float IAtmosphere.RemoveGas(
+	float IAtmosphereState.RemoveGas(
 		int column,
 		int row,
 		GasIndex gas,
@@ -240,7 +234,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		return removed;
 	}
 
-	float IAtmosphere.AddEnergy(
+	float IAtmosphereState.AddEnergy(
 		int column,
 		int row,
 		float joules
@@ -261,14 +255,14 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		return applied;
 	}
 
-	float IAtmosphere.GetTotalGas(
+	float IAtmosphereState.GetTotalGas(
 		int column,
 		int row
 	) {
 		return TryLocate( column, row, out int chunk, out int local ) ? GetTotal( chunk, local ) : 0.0f;
 	}
 
-	void IAtmosphere.AddCondensate(
+	void IAtmosphereState.AddCondensate(
 		int column,
 		int row,
 		GasIndex gas,
@@ -282,7 +276,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		Touch( chunk, layer );
 	}
 
-	float IAtmosphere.RemoveCondensate(
+	float IAtmosphereState.RemoveCondensate(
 		int column,
 		int row,
 		GasIndex gas,
@@ -299,7 +293,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		return removed;
 	}
 
-	float IAtmosphere.GetFraction(
+	float IAtmosphereState.GetFraction(
 		int column,
 		int row,
 		GasIndex gas
@@ -315,44 +309,50 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		if( _disposed ) {
 			return;
 		}
-		_compiled.Dispose();
+		_layers.Dispose();
 		_disposed = true;
 	}
 
+	internal void PrepareUpdate() {
+		ObjectDisposedException.ThrowIf( _disposed, this );
+		_layers.EnsureUsable();
+		EnsureChunkCapacity();
+		ApplyTopologyChanges();
+		_vented = 0.0f;
+	}
+
 	[System.Diagnostics.CodeAnalysis.MemberNotNull(
-		nameof( _compiled ), nameof( _gas ), nameof( _gasNext ), nameof( _condensate ),
+		nameof( _gas ), nameof( _gasNext ), nameof( _condensate ),
 		nameof( _temperature ), nameof( _temperatureNext ), nameof( _total ), nameof( _pressure ),
 		nameof( _flowEast ), nameof( _flowSouth ), nameof( _vent ), nameof( _scale ),
 		nameof( _windX ), nameof( _windY ), nameof( _permeable ), nameof( _connectivity ), nameof( _vacuum )
 	)]
-	private void Compile() {
-		_compiled = _compiler.Compile( _assembly, ChunkSize );
-
+	private void BindLayers() {
 		int count = _gases.Count;
 		_gas = new IGridLayer<float>[count];
 		_gasNext = new IGridLayer<float>[count];
 		_condensate = new IGridLayer<float>?[count];
 		for( int g = 0; g < count; g++ ) {
 			GasIndex gas = new GasIndex( g );
-			_gas[g] = _compiled.Bind<float, GasBinding<TCell, TStrategy>>( new GasBinding<TCell, TStrategy>( _strategy, gas ) );
-			_gasNext[g] = _compiled.CreateLayer<float>();
+			_gas[g] = _layers.Add( _compiled.Bind<float, GasBinding<TCell, TStrategy>>( new GasBinding<TCell, TStrategy>( _strategy, gas ) ) );
+			_gasNext[g] = _layers.Add( _compiled.CreateLayer<float>() );
 			if( _gases.GetDefinition( gas ).CondensationPoint.HasValue ) {
-				_condensate[g] = _compiled.Bind<float, CondensateBinding<TCell, TStrategy>>( new CondensateBinding<TCell, TStrategy>( _strategy, gas ) );
+				_condensate[g] = _layers.Add( _compiled.Bind<float, CondensateBinding<TCell, TStrategy>>( new CondensateBinding<TCell, TStrategy>( _strategy, gas ) ) );
 			}
 		}
-		_temperature = _compiled.Bind<float, TemperatureBinding<TCell, TStrategy>>( new TemperatureBinding<TCell, TStrategy>( _strategy ) );
-		_temperatureNext = _compiled.CreateLayer<float>();
-		_total = _compiled.CreateLayer<float>();
-		_pressure = _compiled.CreateLayer<float>();
-		_flowEast = _compiled.CreateLayer<float>();
-		_flowSouth = _compiled.CreateLayer<float>();
-		_vent = _compiled.CreateLayer<float>();
-		_scale = _compiled.CreateLayer<float>();
-		_windX = _compiled.CreateLayer<float>();
-		_windY = _compiled.CreateLayer<float>();
-		_permeable = _compiled.Bind<bool, PermeabilityBinding<TCell, TStrategy>>( new PermeabilityBinding<TCell, TStrategy>( _strategy ) );
-		_connectivity = _connectivityBuilder.Build( _compiled, new PermeabilityConnectivity<TCell, TStrategy>( _strategy ) );
-		_vacuum = _compiled.CreateVacuumLayer();
+		_temperature = _layers.Add( _compiled.Bind<float, TemperatureBinding<TCell, TStrategy>>( new TemperatureBinding<TCell, TStrategy>( _strategy ) ) );
+		_temperatureNext = _layers.Add( _compiled.CreateLayer<float>() );
+		_total = _layers.Add( _compiled.CreateLayer<float>() );
+		_pressure = _layers.Add( _compiled.CreateLayer<float>() );
+		_flowEast = _layers.Add( _compiled.CreateLayer<float>() );
+		_flowSouth = _layers.Add( _compiled.CreateLayer<float>() );
+		_vent = _layers.Add( _compiled.CreateLayer<float>() );
+		_scale = _layers.Add( _compiled.CreateLayer<float>() );
+		_windX = _layers.Add( _compiled.CreateLayer<float>() );
+		_windY = _layers.Add( _compiled.CreateLayer<float>() );
+		_permeable = _layers.Add( _compiled.Bind<bool, PermeabilityBinding<TCell, TStrategy>>( new PermeabilityBinding<TCell, TStrategy>( _strategy ) ) );
+		_connectivity = _layers.Add( _connectivityBuilder.Build( _compiled, new PermeabilityConnectivity<TCell, TStrategy>( _strategy ) ) );
+		_vacuum = _layers.Add( _compiled.CreateVacuumLayer() );
 
 		int capacity = _compiled.ChunkLayout.ChunkCapacity;
 		_active = new bool[capacity];
@@ -384,8 +384,6 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			return;
 		}
 		GridLayout layout = _compiled.ChunkLayout;
-		_compiled.Commit();
-
 		long covered = 0;
 		foreach( Rect area in _pendingAreas ) {
 			covered += (long)area.Width * area.Height;
@@ -396,8 +394,8 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		PermeabilityConnectivity<TCell, TStrategy> connectivity = new PermeabilityConnectivity<TCell, TStrategy>( _strategy );
 
 		if( _pendingFullRebuild || covered > size * FullRebuildCoverage ) {
-			_compiled.RemoveLayer( _connectivity );
-			_connectivity = _connectivityBuilder.Build( _compiled, connectivity );
+			_layers.Remove( _connectivity );
+			_connectivity = _layers.Add( _connectivityBuilder.Build( _compiled, connectivity ) );
 			Array.Fill( _active, true );
 			Array.Fill( _publish, true );
 		} else {
@@ -407,10 +405,10 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			}
 		}
 
-		_compiled.RemoveLayer( _permeable );
-		_permeable = _compiled.Bind<bool, PermeabilityBinding<TCell, TStrategy>>( new PermeabilityBinding<TCell, TStrategy>( _strategy ) );
-		_compiled.RemoveLayer( _vacuum );
-		_vacuum = _compiled.CreateVacuumLayer();
+		_layers.Remove( _permeable );
+		_permeable = _layers.Add( _compiled.Bind<bool, PermeabilityBinding<TCell, TStrategy>>( new PermeabilityBinding<TCell, TStrategy>( _strategy ) ) );
+		_layers.Remove( _vacuum );
+		_vacuum = _layers.Add( _compiled.CreateVacuumLayer() );
 
 		_pendingAreas.Clear();
 		_pendingFullRebuild = false;
@@ -430,7 +428,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		}
 	}
 
-	private void Step(
+	internal void Step(
 		float dt
 	) {
 		_stepCount++;
@@ -608,7 +606,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	}
 
 	// Recomputes pressure and wind for chunks touched since the last publish, then publishes frames.
-	private void Publish() {
+	internal void Publish() {
 		GridLayout layout = _compiled.ChunkLayout;
 		float windScale = _settings.WindScale * 0.5f;
 

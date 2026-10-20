@@ -10,8 +10,8 @@ internal interface IAtmosphericThermalsConvection {
 		ReadOnlySpan<ConvectionLink> links,
 		float dt,
 		float gasHeatCapacity,
-		IAtmosphere atmosphere,
-		IThermal thermal
+		IAtmosphereState atmosphere,
+		IThermalState thermal
 	);
 
 }

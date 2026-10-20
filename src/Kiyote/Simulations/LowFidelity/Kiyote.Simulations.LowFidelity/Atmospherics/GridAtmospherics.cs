@@ -7,7 +7,6 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 	private readonly IGasRegistry _gases;
 	private readonly IAtmosphericsSettings _settings;
 	private readonly ISimulationClock _clock;
-	private readonly IGridCompiler _compiler;
 	private readonly IConnectivityBuilder _connectivityBuilder;
 	private readonly IAtmospherePressure _pressure;
 	private readonly IAtmosphereAcceleration _acceleration;
@@ -21,7 +20,6 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 		IGasRegistry gases,
 		IAtmosphericsSettings settings,
 		ISimulationClock clock,
-		IGridCompiler compiler,
 		IConnectivityBuilder connectivityBuilder,
 		IAtmospherePressure pressure,
 		IAtmosphereAcceleration acceleration,
@@ -34,7 +32,6 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 		_gases = gases;
 		_settings = settings;
 		_clock = clock;
-		_compiler = compiler;
 		_connectivityBuilder = connectivityBuilder;
 		_pressure = pressure;
 		_acceleration = acceleration;
@@ -46,16 +43,15 @@ internal sealed class GridAtmospherics : IGridAtmospherics {
 	}
 
 	IAtmosphere IGridAtmospherics.Create<TCell, TStrategy>(
-		IGridAssembly<TCell> ship,
+		ICompiledGridAssembly<TCell> compiled,
 		TStrategy strategy
 	) {
 		return new Atmosphere<TCell, TStrategy>(
-			ship,
+			compiled,
 			strategy,
 			_gases,
 			_settings,
 			_clock,
-			_compiler,
 			_connectivityBuilder,
 			_pressure,
 			_acceleration,

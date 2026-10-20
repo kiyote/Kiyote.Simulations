@@ -29,6 +29,7 @@ internal sealed class CombinedVisualizer {
 	private readonly IAnimationWriter _animation;
 	private readonly IFileSystem _fileSystem;
 	private readonly IGridAtmosphericThermals _atmosphericThermals;
+	private readonly IGridCompiler _compiler;
 	private readonly IMaterialRegistry _materials;
 	private readonly ThermalsSettings _thermalsSettings;
 	private readonly INumericBufferOperator _op;
@@ -41,6 +42,7 @@ internal sealed class CombinedVisualizer {
 		INumericBufferFactory bufferFactory,
 		INumericBufferOperator op,
 		IGridAtmosphericThermals atmosphericThermals,
+		IGridCompiler compiler,
 		IMaterialRegistry materials,
 		ThermalsSettings thermalsSettings
 	) {
@@ -48,6 +50,7 @@ internal sealed class CombinedVisualizer {
 		_fileSystem = fileSystem;
 		_op = op;
 		_atmosphericThermals = atmosphericThermals;
+		_compiler = compiler;
 		_materials = materials;
 		_thermalsSettings = thermalsSettings;
 		_pixels = bufferFactory.Create<byte>( AsciiGridSource.Width, AsciiGridSource.Height, 0 );
@@ -65,13 +68,14 @@ internal sealed class CombinedVisualizer {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 
+		using ICompiledGridAssembly<AtmosphereCell> compiled = _compiler.Compile( assembly, 32 );
 		using IAtmosphericThermals simulation = _atmosphericThermals.Create(
-			assembly,
+			compiled,
 			new AtmosphereCellStrategy(),
 			new ThermalCellStrategy( _materials, StructureTemperature )
 		);
-		IAtmosphere atmosphere = simulation.Atmosphere;
-		IThermal thermal = simulation.Thermal;
+		IAtmosphereState atmosphere = simulation.Atmosphere;
+		IThermalState thermal = simulation.Thermal;
 		// Grid +Y is south, so north-east is (1, -1).
 		thermal.SunDirection = new Vector( 1.0f, -1.0f );
 
@@ -107,7 +111,7 @@ internal sealed class CombinedVisualizer {
 	private void Render(
 		DenseGridSource<AtmosphereCell> ship,
 		IGridLayer<float> temperature,
-		IAtmosphere? atmosphere,
+		IAtmosphereState? atmosphere,
 		IAnimationBuilder builder
 	) {
 		float minimum = float.MaxValue;
@@ -131,7 +135,7 @@ internal sealed class CombinedVisualizer {
 
 	private static bool IsShown(
 		DenseGridSource<AtmosphereCell> ship,
-		IAtmosphere? atmosphere,
+		IAtmosphereState? atmosphere,
 		int column,
 		int row
 	) {

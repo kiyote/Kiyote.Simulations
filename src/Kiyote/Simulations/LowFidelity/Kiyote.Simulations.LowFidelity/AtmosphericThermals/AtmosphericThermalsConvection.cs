@@ -13,8 +13,8 @@ internal sealed class AtmosphericThermalsConvection : IAtmosphericThermalsConvec
 		ReadOnlySpan<ConvectionLink> links,
 		float dt,
 		float gasHeatCapacity,
-		IAtmosphere atmosphere,
-		IThermal thermal
+		IAtmosphereState atmosphere,
+		IThermalState thermal
 	) {
 		IGridLayer<float> gasTemperature = atmosphere.Temperature;
 		IGridLayer<float> structureTemperature = thermal.Temperature;

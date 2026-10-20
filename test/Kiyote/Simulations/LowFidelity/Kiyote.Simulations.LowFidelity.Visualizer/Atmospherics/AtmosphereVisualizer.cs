@@ -16,6 +16,7 @@ internal sealed class AtmosphereVisualizer {
 
 	private readonly IAnimationWriter _animation;
 	private readonly IGridAtmospherics _atmospherics;
+	private readonly IGridCompiler _compiler;
 	private readonly IFileSystem _fileSystem;
 	private readonly INumericBufferOperator _op;
 	private readonly INumericBuffer<byte> _pixels;
@@ -26,9 +27,11 @@ internal sealed class AtmosphereVisualizer {
 		IFileSystem fileSystem,
 		INumericBufferFactory bufferFactory,
 		INumericBufferOperator op,
-		IGridAtmospherics atmospherics
+		IGridAtmospherics atmospherics,
+		IGridCompiler compiler
 	) {
 		_atmospherics = atmospherics;
+		_compiler = compiler;
 		_animation = animationWriter;
 		_fileSystem = fileSystem;
 		_op = op;
@@ -47,7 +50,8 @@ internal sealed class AtmosphereVisualizer {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 
-		using IAtmosphere atmosphere = atmospherics.Create( assembly, new AtmosphereCellStrategy() );
+		using ICompiledGridAssembly<AtmosphereCell> compiled = _compiler.Compile( assembly, 32 );
+		using IAtmosphere atmosphere = atmospherics.Create( compiled, new AtmosphereCellStrategy() );
 		(int Column, int Row, GasIndex Gas)[] pumps = [
 			( 18, 7, atmosphere.Gases.GetIndex( "O2" ) ),
 			( 17, 7, atmosphere.Gases.GetIndex( "N2" ) )

@@ -14,6 +14,7 @@ internal sealed class AtmosphereTests {
 
 	private IGridAtmospherics _atmospherics;
 	private IGridAssembly<TestCell> _assembly;
+	private ICompiledGridAssembly<TestCell> _compiled;
 	private PlacementId _placement;
 	private IAtmosphere _atmosphere;
 
@@ -26,7 +27,6 @@ internal sealed class AtmosphereTests {
 		IServiceProvider services = new ServiceCollection()
 			.AddSingleton( gasRegistry )
 			.AddSingleton<IAtmosphericsSettings, TestAtmosphericsSettings>()
-			.AddSingleton<IGridCompiler, GridCompiler>()
 			.AddSingleton<IConnectivityBuilder, ConnectivityBuilder>()
 			.AddLowFidelitySimulations()
 			.BuildServiceProvider();
@@ -37,6 +37,7 @@ internal sealed class AtmosphereTests {
 	[TearDown]
 	public void TearDown() {
 		_atmosphere?.Dispose();
+		_compiled?.Dispose();
 	}
 
 	[Test]
@@ -208,11 +209,13 @@ internal sealed class AtmosphereTests {
 	private IAtmosphere Create(
 		DenseGridSource<TestCell> ship
 	) {
+		_compiled?.Dispose();
 		_assembly = new GridAssembly<TestCell>();
 		AttachResult attached = _assembly.TryAttach( ship, 0, 0 );
 		Assert.That( attached.Succeeded, Is.True );
 		_placement = attached.Placement;
-		return _atmospherics.Create( _assembly, new TestCellStrategy() );
+		_compiled = new GridCompiler().Compile( _assembly, AtmosphereSimd.ChunkSize );
+		return _atmospherics.Create( _compiled, new TestCellStrategy() );
 	}
 
 	// Walls all round a permeable floor.

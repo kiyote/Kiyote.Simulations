@@ -19,6 +19,7 @@ internal sealed class ThermalVisualizer {
 
 	private readonly IAnimationWriter _animation;
 	private readonly IGridThermals _thermals;
+	private readonly IGridCompiler _compiler;
 	private readonly IMaterialRegistry _materials;
 	private readonly ThermalsSettings _settings;
 	private readonly IFileSystem _fileSystem;
@@ -29,6 +30,7 @@ internal sealed class ThermalVisualizer {
 		IFileSystem fileSystem,
 		INumericBufferFactory bufferFactory,
 		IGridThermals thermals,
+		IGridCompiler compiler,
 		IMaterialRegistry materials,
 		ThermalsSettings settings
 	) {
@@ -36,6 +38,7 @@ internal sealed class ThermalVisualizer {
 		_animation = animationWriter;
 		_fileSystem = fileSystem;
 		_thermals = thermals;
+		_compiler = compiler;
 		_materials = materials;
 		_pixels = bufferFactory.Create<byte>( AsciiGridSource.Width, AsciiGridSource.Height, 0 );
 	}
@@ -65,7 +68,8 @@ internal sealed class ThermalVisualizer {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 
-		using IThermal thermal = _thermals.Create( assembly, new ThermalCellStrategy( _materials, RoomTemperature ) );
+		using ICompiledGridAssembly<AtmosphereCell> compiled = _compiler.Compile( assembly, 32 );
+		using IThermal thermal = _thermals.Create( compiled, new ThermalCellStrategy( _materials, RoomTemperature ) );
 		thermal.SunDirection = sunDirection;
 
 		string fileName = _fileSystem.Path.Combine( outputFolder, name );

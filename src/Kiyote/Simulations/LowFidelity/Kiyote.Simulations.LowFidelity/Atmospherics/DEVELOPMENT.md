@@ -84,11 +84,12 @@ Diagonals are skipped: they double the cost and pipes already spread isotropical
 
 ## Ownership, persistence and topology
 
-- The atmosphere receives the ship's `IGridAssembly<TCell>`, compiles its own `ICompiledGridAssembly<TCell>`, and owns every layer it creates.
-- Gas, temperature and condensate layers are **bound** to the cells through `TStrategy`. `Commit()` writes dirty chunks back into the cells; call it before saving or before edits that need up-to-date cell values.
+- The atmosphere borrows the caller's `ICompiledGridAssembly<TCell>` with 32-cell chunks and owns only the layers it registers. The combined simulation shares that same compilation with the structure thermal simulation and exposes lifecycle-free child state views.
+- Gas, temperature and condensate layers are **bound** to the cells through `TStrategy`. The caller invokes `compiled.Commit()` to write dirty chunks back into the cells before saving or edits that need up-to-date cell values. Update, invalidation and disposal never implicitly commit.
 - Flows are not persisted; they rebuild within a few steps.
 - `InvalidateTopology( area )` rebuilds connectivity for an area (door, breach, new tile); `InvalidateTopology()` rebuilds everything. Large areas fall back to a full rebuild.
-- If the compiled grid goes stale (cells added or removed), `Update` commits, recompiles and rebinds automatically.
+- Individual cell additions/removals update the live compilation; invalidate the affected topology before updating. Attach/detach makes the compilation stale: commit first, dispose simulations and then the compilation, edit, compile and recreate. A stale Update throws rather than attempting a rescue commit. Reapply runtime options and switch readers to the replacement frame provider.
+- Dispose a simulation before its borrowed compilation. Simulation disposal removes only its own layers, leaves other simulations and caller layers intact, and is idempotent. Disposing the compilation early is a caller error, not a recovery path.
 - All caller changes happen **between** `Update` calls; they are stored and nothing is recalculated until the next `Update`.
 
 ## Time stepping

@@ -9,18 +9,15 @@ namespace Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 // cell impermeable to gas), at a rate set by that structure cell's material.
 public interface IAtmosphericThermals : IDisposable {
 
-	IAtmosphere Atmosphere { get; }
+	IAtmosphereState Atmosphere { get; }
 
-	IThermal Thermal { get; }
+	IThermalState Thermal { get; }
 
 	// Updates both simulations, then runs any heat exchanges that have come due.
 	// Returns the number of heat exchanges run.
 	int Update(
 		TimeSpan elapsed
 	);
-
-	// Writes both simulations back to the cells.
-	void Commit();
 
 	void InvalidateTopology(
 		Rect area

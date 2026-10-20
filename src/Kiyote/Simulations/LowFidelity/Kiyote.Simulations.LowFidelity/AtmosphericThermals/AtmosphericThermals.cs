@@ -12,11 +12,10 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 
 	private static readonly (int Column, int Row)[] Faces = [( 0, -1 ), ( 1, 0 ), ( 0, 1 ), ( -1, 0 )];
 
-	private readonly IGridAssembly<TCell> _assembly;
+	private readonly ICompiledGridAssembly<TCell> _compiled;
 	private readonly TAtmosphereStrategy _atmosphereStrategy;
 	private readonly TThermalStrategy _thermalStrategy;
 	private readonly IAtmosphericsSettings _atmosphericsSettings;
-	private readonly IGridCompiler _compiler;
 	private readonly IAtmosphericThermalsConvection _convection;
 	private readonly IAtmosphere _atmosphere;
 	private readonly IThermal _thermal;
@@ -31,7 +30,7 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	private bool _disposed;
 
 	public AtmosphericThermals(
-		IGridAssembly<TCell> assembly,
+		ICompiledGridAssembly<TCell> compiled,
 		TAtmosphereStrategy atmosphereStrategy,
 		TThermalStrategy thermalStrategy,
 		IGridAtmospherics atmospherics,
@@ -40,29 +39,36 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 		IAtmosphericsSettings atmosphericsSettings,
 		IAtmosphericThermalsSettings settings,
 		ISimulationClock clock,
-		IGridCompiler compiler,
 		IAtmosphericThermalsConvection convection
 	) {
-		_assembly = assembly;
+		_compiled = compiled;
 		_atmosphereStrategy = atmosphereStrategy;
 		_thermalStrategy = thermalStrategy;
 		_atmosphericsSettings = atmosphericsSettings;
-		_compiler = compiler;
 		_convection = convection;
 		_conductances = [.. materials.Definitions.Select( d => d.Convection )];
 		_capacities = [.. materials.Definitions.Select( d => d.HeatCapacity )];
 		_ticksPerExchange = Math.Max( 1, (int)MathF.Round( settings.ExchangeInterval / clock.FixedTimeStep ) );
 		_exchangeTime = _ticksPerExchange * clock.FixedTimeStep;
-		_atmosphere = atmospherics.Create( assembly, atmosphereStrategy );
-		_thermal = thermals.Create( assembly, thermalStrategy );
 		_cells = [];
 		_links = [];
-		BuildLinks();
+		_atmosphere = atmospherics.Create( compiled, atmosphereStrategy );
+		bool initialized = false;
+		try {
+			_thermal = thermals.Create( compiled, thermalStrategy );
+			BuildLinks();
+			initialized = true;
+		} finally {
+			if( !initialized ) {
+				_thermal?.Dispose();
+				_atmosphere.Dispose();
+			}
+		}
 	}
 
-	IAtmosphere IAtmosphericThermals.Atmosphere => _atmosphere;
+	IAtmosphereState IAtmosphericThermals.Atmosphere => _atmosphere;
 
-	IThermal IAtmosphericThermals.Thermal => _thermal;
+	IThermalState IAtmosphericThermals.Thermal => _thermal;
 
 	// Both simulations step on the same clock, so the atmosphere's tick count drives the exchanges.
 	int IAtmosphericThermals.Update(
@@ -83,12 +89,6 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 			exchanges++;
 		}
 		return exchanges;
-	}
-
-	void IAtmosphericThermals.Commit() {
-		ObjectDisposedException.ThrowIf( _disposed, this );
-		_atmosphere.Commit();
-		_thermal.Commit();
 	}
 
 	void IAtmosphericThermals.InvalidateTopology(
@@ -117,11 +117,11 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	// Pairs every gas cell (occupied and permeable) with its own floor and each adjacent wall
 	// (occupied and impermeable). Only changes with the topology.
 	private void BuildLinks() {
-		using ICompiledGridAssembly<TCell> compiled = _compiler.Compile( _assembly, ChunkSize );
-		IGridLayer<bool> permeable = compiled.Bind<bool, PermeabilityBinding<TCell, TAtmosphereStrategy>>( new PermeabilityBinding<TCell, TAtmosphereStrategy>( _atmosphereStrategy ) );
-		IGridLayer<float> conductance = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _conductances ) );
-		IGridLayer<float> capacity = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _capacities ) );
-		GridLayout layout = compiled.ChunkLayout;
+		using OwnedGridLayers<TCell> layers = new OwnedGridLayers<TCell>( _compiled, ChunkSize );
+		IGridLayer<bool> permeable = layers.Add( _compiled.Bind<bool, PermeabilityBinding<TCell, TAtmosphereStrategy>>( new PermeabilityBinding<TCell, TAtmosphereStrategy>( _atmosphereStrategy ) ) );
+		IGridLayer<float> conductance = layers.Add( _compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _conductances ) ) );
+		IGridLayer<float> capacity = layers.Add( _compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _capacities ) ) );
+		GridLayout layout = _compiled.ChunkLayout;
 
 		List<ConvectionCell> cells = [];
 		List<ConvectionLink> links = [];

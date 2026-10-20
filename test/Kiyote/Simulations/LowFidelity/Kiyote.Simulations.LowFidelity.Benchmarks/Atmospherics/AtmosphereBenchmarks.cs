@@ -16,6 +16,7 @@ public class AtmosphereBenchmarks {
 	private static readonly TimeSpan Step = TimeSpan.FromSeconds( FixedTimeStep );
 
 	private readonly IAtmosphere _atmosphere;
+	private readonly ICompiledGridAssembly<Cell> _compiled;
 	private readonly GasIndex _gas;
 
 	public AtmosphereBenchmarks() {
@@ -41,7 +42,8 @@ public class AtmosphereBenchmarks {
 			throw new InvalidOperationException( "Unable to attach grid." );
 		}
 
-		_atmosphere = atmospherics.Create( assembly, new CellStrategy() );
+		_compiled = services.GetRequiredService<IGridCompiler>().Compile( assembly, 32 );
+		_atmosphere = atmospherics.Create( _compiled, new CellStrategy() );
 		_gas = gases.GetIndex( "N2" );
 		_atmosphere.AddGas( 50, 50, _gas, 1000f );
 	}
@@ -70,6 +72,7 @@ public class AtmosphereBenchmarks {
 	[GlobalCleanup]
 	public void Cleanup() {
 		_atmosphere.Dispose();
+		_compiled.Dispose();
 	}
 
 	private readonly record struct Cell(

@@ -10,6 +10,7 @@ internal sealed class ThermalTests {
 	private const float Initial = 293.15f;
 
 	private IThermal _thermal;
+	private ICompiledGridAssembly<TestCell> _compiled;
 
 	[SetUp]
 	public void SetUp() {
@@ -27,15 +28,16 @@ internal sealed class ThermalTests {
 		IServiceProvider services = new ServiceCollection()
 			.AddSingleton( materials )
 			.AddSingleton<IThermalsSettings, TestThermalsSettings>()
-			.AddSingleton<IGridCompiler, GridCompiler>()
 			.AddLowFidelitySimulations()
 			.BuildServiceProvider();
-		_thermal = services.GetRequiredService<IGridThermals>().Create( assembly, new TestStrategy( materials.GetIndex( "hull" ) ) );
+		_compiled = new GridCompiler().Compile( assembly, 32 );
+		_thermal = services.GetRequiredService<IGridThermals>().Create( _compiled, new TestStrategy( materials.GetIndex( "hull" ) ) );
 	}
 
 	[TearDown]
 	public void TearDown() {
 		_thermal?.Dispose();
+		_compiled?.Dispose();
 	}
 
 	[Test]

@@ -6,8 +6,9 @@ namespace Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 
 public interface IGridAtmosphericThermals {
 
+	// Both subsystems borrow this live 32-cell-chunk compilation; the caller owns commit and disposal.
 	IAtmosphericThermals Create<TCell, TAtmosphereStrategy, TThermalStrategy>(
-		IGridAssembly<TCell> ship,
+		ICompiledGridAssembly<TCell> compiled,
 		TAtmosphereStrategy atmosphereStrategy,
 		TThermalStrategy thermalStrategy
 	) where TAtmosphereStrategy : struct, IAtmosphereCellStrategy<TCell>
