@@ -98,6 +98,7 @@ internal sealed class GridAirflowVisualizer {
 				Pump( inputPressure, inputVelocityX, inputVelocityY, inputConcentration );
 
 				_airflow.Update(
+					compiled,
 					neighbourhood,
 					inputPressure, outputPressure,
 					inputVelocityX, inputVelocityY,

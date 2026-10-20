@@ -2,7 +2,7 @@ namespace Kiyote.Simulations.Topology.Projection;
 
 public interface IGridProjectionSettings {
 
-	// Number of Jacobi relaxation iterations performed per Update.
+	// Nonnegative number of Jacobi relaxation iterations per Update. Zero uses the warm-start pressure unchanged.
 	int Iterations { get; }
 
 }

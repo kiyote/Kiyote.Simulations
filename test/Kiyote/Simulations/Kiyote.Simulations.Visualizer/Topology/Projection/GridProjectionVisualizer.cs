@@ -81,7 +81,7 @@ internal sealed class GridProjectionVisualizer {
 		using IAnimationBuilder velocityBuilder = _animation.StartAnimation( velocityFileName, TimeSpan.FromMilliseconds( 100 ) );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
 			for( int step = 0; step < StepsPerFrame; step++ ) {
-				_projection.Update( neighbourhood, inputX, inputY, outputX, outputY, pressure, pressureScratch, divergence );
+				_projection.Update( compiled, neighbourhood, inputX, inputY, outputX, outputY, pressure, pressureScratch, divergence );
 				compiled.Swap( inputX, outputX );
 				compiled.Swap( inputY, outputY );
 			}

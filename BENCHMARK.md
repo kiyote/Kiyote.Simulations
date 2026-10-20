@@ -2,31 +2,41 @@
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
-| Update | 25.42 us | 0.558 us | 0.522 us |         - |
+| Update | 26.77 us | 0.439 us | 0.411 us |         - |
 
 ## Topology.GridPressure
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
-| Update | 27.34 us | 0.624 us | 0.584 us |         - |
+| Update | 26.59 us | 1.231 us | 1.151 us |         - |
 
 ## Topology.GridProjection
 
-| Method | Mean     | Error   | StdDev  | Allocated |
-|--------|---------:|--------:|--------:|----------:|
-| Update | 555.0 us | 7.73 us | 6.85 us |       5 B |
+| Method | Iterations | RetainedEmptyChunks | Mean     | Error    | StdDev   | Allocated |
+|--------|-----------:|--------------------:|---------:|---------:|---------:|----------:|
+| Update |          1 |                   0 | 100.1 us |  2.09 us |  1.95 us |       1 B |
+| Update |          1 |                 128 | 103.1 us |  4.37 us |  4.08 us |       1 B |
+| Update |         20 |                   0 | 545.7 us | 33.24 us | 31.09 us |       6 B |
+| Update |         20 |                 128 | 593.6 us | 10.66 us |  9.45 us |       5 B |
+| Update |         21 |                   0 | 583.5 us |  8.71 us |  7.72 us |       6 B |
+| Update |         21 |                 128 | 634.6 us | 12.20 us | 11.41 us |       6 B |
 
 ## Topology.GridAdvection
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
-| Update | 51.97 us | 1.316 us | 1.166 us |         - |
+| Update | 53.21 us | 1.338 us | 1.252 us |         - |
 
 ## Topology.GridAirflow
 
-| Method | Mean     | Error    | StdDev   | Allocated |
-|--------|---------:|---------:|---------:|----------:|
-| Update | 765.4 us | 23.98 us | 20.03 us |       5 B |
+| Method | Iterations | RetainedEmptyChunks | Mean     | Error    | StdDev   | Allocated |
+|--------|-----------:|--------------------:|---------:|---------:|---------:|----------:|
+| Update |          1 |                   0 | 326.6 us |  8.13 us |  7.20 us |       2 B |
+| Update |          1 |                 128 | 327.8 us | 12.63 us | 11.82 us |       3 B |
+| Update |         20 |                   0 | 839.4 us | 35.17 us | 31.18 us |       6 B |
+| Update |         20 |                 128 | 860.0 us | 15.50 us | 14.50 us |       6 B |
+| Update |         21 |                   0 | 806.6 us | 20.99 us | 19.63 us |       6 B |
+| Update |         21 |                 128 | 818.9 us | 26.55 us | 24.83 us |       6 B |
 
 ## LowFidelity.Atmosphere
 

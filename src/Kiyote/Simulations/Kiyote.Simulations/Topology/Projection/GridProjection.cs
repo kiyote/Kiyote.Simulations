@@ -46,6 +46,7 @@ public sealed class GridProjection : IGridProjection {
 		IGridProjectionSettings settings
 	) {
 		_iterations = settings.Iterations;
+		ArgumentOutOfRangeException.ThrowIfNegative( _iterations, nameof( settings ) );
 	}
 
 	ProjectionNeighbourhood IGridProjection.CreateNeighbourhood<TCell>(
@@ -67,7 +68,8 @@ public sealed class GridProjection : IGridProjection {
 		return new ProjectionNeighbourhood( connectivity, combined );
 	}
 
-	void IGridProjection.Update(
+	void IGridProjection.Update<TCell>(
+		ICompiledGridAssembly<TCell> compiled,
 		ProjectionNeighbourhood neighbourhood,
 		IGridLayer<float> sourceVelocityX,
 		IGridLayer<float> sourceVelocityY,
@@ -90,13 +92,7 @@ public sealed class GridProjection : IGridProjection {
 				(relaxationSource, relaxationDestination) = (relaxationDestination, relaxationSource);
 			}
 			if( ( _iterations & 1 ) == 1 ) {
-				GridLayout layout = pressure.Layout;
-				foreach( int chunk in layout.EnumerateChunks() ) {
-					relaxationSource.GetValues( chunk ).CopyTo( pressure.GetValues( chunk ) );
-					if( layout.GetFill( chunk ) != ChunkFill.Empty ) {
-						pressure.MarkDirty( chunk );
-					}
-				}
+				compiled.Swap( pressure, pressureScratch );
 			}
 
 			SubtractGradient( neighbourhood.Combined, pressure, sourceVelocityX, sourceVelocityY, destinationVelocityX, destinationVelocityY, scratchA );

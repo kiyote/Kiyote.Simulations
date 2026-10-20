@@ -148,7 +148,7 @@ public sealed class GridProjectionTests {
 		TStrategy strategy,
 		int steps,
 		Cells cells
-	) where TStrategy : struct, IConnectivityStrategy<float> {
+	) where TStrategy : struct, IConnectivityStrategy<Cell> {
 		Step( strategy, steps, (cells, 0, 0) );
 	}
 
@@ -156,7 +156,7 @@ public sealed class GridProjectionTests {
 		TStrategy strategy,
 		int steps,
 		params (Cells Cells, int Column, int Row)[] placements
-	) where TStrategy : struct, IConnectivityStrategy<float> {
+	) where TStrategy : struct, IConnectivityStrategy<Cell> {
 		Step( _chunkSize, strategy, steps, placements );
 	}
 
@@ -165,39 +165,39 @@ public sealed class GridProjectionTests {
 		TStrategy strategy,
 		int steps,
 		params (Cells Cells, int Column, int Row)[] placements
-	) where TStrategy : struct, IConnectivityStrategy<float> {
-		using ICompiledGridAssembly<float> x = Compile( chunkSize, placements, p => p.X );
-		using ICompiledGridAssembly<float> y = Compile( chunkSize, placements, p => p.Y );
-		using ICompiledGridAssembly<float> pressure = Compile( chunkSize, placements, p => p.Pressure );
-
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( x, strategy );
-		ProjectionNeighbourhood neighbourhood = _projection.CreateNeighbourhood( x, connectivity );
-		IGridLayer<float> vx = x.Bind<float, Identity>( default );
-		IGridLayer<float> vxScratch = x.CreateLayer<float>();
-		IGridLayer<float> vy = y.Bind<float, Identity>( default );
-		IGridLayer<float> vyScratch = y.CreateLayer<float>();
-		IGridLayer<float> p = pressure.Bind<float, Identity>( default );
-		IGridLayer<float> pScratch = pressure.CreateLayer<float>();
-		IGridLayer<float> divergence = pressure.CreateLayer<float>();
+	) where TStrategy : struct, IConnectivityStrategy<Cell> {
+		using ICompiledGridAssembly<Cell> compiled = Compile( chunkSize, placements );
+		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( compiled, strategy );
+		ProjectionNeighbourhood neighbourhood = _projection.CreateNeighbourhood( compiled, connectivity );
+		IGridLayer<float> vx = compiled.Bind<float, XBinding>( default );
+		IGridLayer<float> vxScratch = compiled.CreateLayer<float>();
+		IGridLayer<float> vy = compiled.Bind<float, YBinding>( default );
+		IGridLayer<float> vyScratch = compiled.CreateLayer<float>();
+		IGridLayer<float> p = compiled.Bind<float, PressureBinding>( default );
+		IGridLayer<float> pScratch = compiled.CreateLayer<float>();
+		IGridLayer<float> divergence = compiled.CreateLayer<float>();
 
 		for( int i = 0; i < steps; i++ ) {
-			_projection.Update( neighbourhood, vx, vy, vxScratch, vyScratch, p, pScratch, divergence );
-			x.Swap( vx, vxScratch );
-			y.Swap( vy, vyScratch );
+			_projection.Update( compiled, neighbourhood, vx, vy, vxScratch, vyScratch, p, pScratch, divergence );
+			compiled.Swap( vx, vxScratch );
+			compiled.Swap( vy, vyScratch );
 		}
-		x.Commit();
-		y.Commit();
-		pressure.Commit();
+		compiled.Commit();
 	}
 
-	private static ICompiledGridAssembly<float> Compile(
+	private static ICompiledGridAssembly<Cell> Compile(
 		int chunkSize,
-		(Cells Cells, int Column, int Row)[] placements,
-		Func<Cells, DenseGridSource<float>> select
+		(Cells Cells, int Column, int Row)[] placements
 	) {
-		IGridAssembly<float> assembly = new GridAssembly<float>();
+		IGridAssembly<Cell> assembly = new GridAssembly<Cell>();
 		foreach( (Cells cells, int column, int row) in placements ) {
-			Assert.That( assembly.TryAttach( select( cells ), column, row ).Succeeded, Is.True );
+			DenseGridSource<Cell> source = new DenseGridSource<Cell>( cells.X.Width, cells.X.Height );
+			for( int r = 0; r < cells.X.Height; r++ ) {
+				for( int c = 0; c < cells.X.Width; c++ ) {
+					Assert.That( source.TrySetCell( c, r, new Cell( cells, c, r ) ), Is.True );
+				}
+			}
+			Assert.That( assembly.TryAttach( source, column, row ).Succeeded, Is.True );
 		}
 		return new GridCompiler().Compile( assembly, chunkSize );
 	}
@@ -252,23 +252,35 @@ public sealed class GridProjectionTests {
 		}
 	}
 
-	private readonly struct Identity : IGridLayerBinding<float, float> {
-		float IGridLayerBinding<float, float>.Extract( in float cell ) => cell;
-		void IGridLayerBinding<float, float>.Commit( ref float cell, float value ) => cell = value;
+	private readonly record struct Cell( Cells Data, int Column, int Row );
+
+	private readonly struct XBinding : IGridLayerBinding<Cell, float> {
+		public float Extract( in Cell cell ) => cell.Data.X.GetCell( cell.Column, cell.Row );
+		public void Commit( ref Cell cell, float value ) => cell.Data.X.GetCell( cell.Column, cell.Row ) = value;
 	}
 
-	private readonly struct Open : IConnectivityStrategy<float> {
-		bool IConnectivityStrategy<float>.Evaluate(
-			in TopologyCell<float> source,
-			in TopologyCell<float> destination,
+	private readonly struct YBinding : IGridLayerBinding<Cell, float> {
+		public float Extract( in Cell cell ) => cell.Data.Y.GetCell( cell.Column, cell.Row );
+		public void Commit( ref Cell cell, float value ) => cell.Data.Y.GetCell( cell.Column, cell.Row ) = value;
+	}
+
+	private readonly struct PressureBinding : IGridLayerBinding<Cell, float> {
+		public float Extract( in Cell cell ) => cell.Data.Pressure.GetCell( cell.Column, cell.Row );
+		public void Commit( ref Cell cell, float value ) => cell.Data.Pressure.GetCell( cell.Column, cell.Row ) = value;
+	}
+
+	private readonly struct Open : IConnectivityStrategy<Cell> {
+		bool IConnectivityStrategy<Cell>.Evaluate(
+			in TopologyCell<Cell> source,
+			in TopologyCell<Cell> destination,
 			Direction direction,
-			in TopologyCell<float> orthogonalA,
-			in TopologyCell<float> orthogonalB,
+			in TopologyCell<Cell> orthogonalA,
+			in TopologyCell<Cell> orthogonalB,
 			bool isSeam
 		) => destination.IsOccupied;
 	}
 
-	private readonly struct Box : IConnectivityStrategy<float> {
+	private readonly struct Box : IConnectivityStrategy<Cell> {
 		private readonly int _left;
 		private readonly int _top;
 		private readonly int _right;
@@ -281,16 +293,16 @@ public sealed class GridProjectionTests {
 			_bottom = bottom;
 		}
 
-		bool IConnectivityStrategy<float>.Evaluate(
-			in TopologyCell<float> source,
-			in TopologyCell<float> destination,
+		bool IConnectivityStrategy<Cell>.Evaluate(
+			in TopologyCell<Cell> source,
+			in TopologyCell<Cell> destination,
 			Direction direction,
-			in TopologyCell<float> orthogonalA,
-			in TopologyCell<float> orthogonalB,
+			in TopologyCell<Cell> orthogonalA,
+			in TopologyCell<Cell> orthogonalB,
 			bool isSeam
 		) => destination.IsOccupied && Inside( source ) == Inside( destination );
 
-		private bool Inside( in TopologyCell<float> cell ) =>
+		private bool Inside( in TopologyCell<Cell> cell ) =>
 			cell.Column >= _left && cell.Column <= _right && cell.Row >= _top && cell.Row <= _bottom;
 	}
 

@@ -1,80 +1,29 @@
-using Kiyote.Geometry.Topology;
-using Kiyote.Simulations.Topology.Projection;
-
 namespace Kiyote.Simulations.Benchmarks.Topology.Projection;
 
 [MemoryDiagnoser( false )]
 public class GridProjectionBenchmarks {
 
-	private const int Size = 100;
-	private const int ChunkSize = 32;
+	private ProjectionBenchmarkSimulation? _simulation;
 
-	private readonly IGridProjection _projection;
-	private readonly ICompiledGridAssembly<float> _compiled;
-	private readonly ProjectionNeighbourhood _neighbourhood;
-	private readonly IGridLayer<float> _velocityX;
-	private readonly IGridLayer<float> _velocityY;
-	private readonly IGridLayer<float> _velocityXScratch;
-	private readonly IGridLayer<float> _velocityYScratch;
-	private readonly IGridLayer<float> _pressure;
-	private readonly IGridLayer<float> _pressureScratch;
-	private readonly IGridLayer<float> _divergence;
+	[Params( 1, 20, 21 )]
+	public int Iterations { get; set; }
 
-	public GridProjectionBenchmarks() {
-		_projection = new GridProjection( new Settings( 20 ) );
-		DenseGridSource<float> grid = new DenseGridSource<float>( Size, Size );
-		for( int row = 0; row < Size; row++ ) {
-			for( int column = 0; column < Size; column++ ) {
-				grid.TrySetCell( column, row, 0f );
-			}
-		}
+	[Params( 0, 128 )]
+	public int RetainedEmptyChunks { get; set; }
 
-		IGridAssembly<float> assembly = new GridAssembly<float>();
-		if( !assembly.TryAttach( grid, 0, 0 ).Succeeded ) {
-			throw new InvalidOperationException( "Unable to attach grid." );
-		}
-		_compiled = new GridCompiler().Compile( assembly, ChunkSize );
-		IGridLayer<Direction> connectivity = new ConnectivityBuilder().Build( _compiled, new Open() );
-		_neighbourhood = _projection.CreateNeighbourhood( _compiled, connectivity );
-		_velocityX = _compiled.CreateLayer<float>();
-		_velocityY = _compiled.CreateLayer<float>();
-		_velocityXScratch = _compiled.CreateLayer<float>();
-		_velocityYScratch = _compiled.CreateLayer<float>();
-		_pressure = _compiled.CreateLayer<float>();
-		_pressureScratch = _compiled.CreateLayer<float>();
-		_divergence = _compiled.CreateLayer<float>();
-		for( int row = 0; row < Size; row++ ) {
-			_velocityX[0, row] = 100f;
-		}
+	private ProjectionBenchmarkSimulation Simulation => _simulation
+		?? throw new InvalidOperationException( "The benchmark has not been initialized." );
+
+	[GlobalSetup]
+	public void Setup() {
+		_simulation = new ProjectionBenchmarkSimulation( Iterations, RetainedEmptyChunks );
+		_simulation.WarmupAndValidateAllocations();
 	}
 
 	[Benchmark]
-	public void Update() {
-		_projection.Update( _neighbourhood, _velocityX, _velocityY, _velocityXScratch, _velocityYScratch, _pressure, _pressureScratch, _divergence );
-		_compiled.Swap( _velocityX, _velocityXScratch );
-		_compiled.Swap( _velocityY, _velocityYScratch );
-	}
+	public void Update() => Simulation.Update();
 
 	[GlobalCleanup]
-	public void Cleanup() {
-		_compiled.Dispose();
-	}
+	public void Cleanup() => Simulation.Cleanup();
 
-	private readonly struct Open : IConnectivityStrategy<float> {
-		bool IConnectivityStrategy<float>.Evaluate(
-			in TopologyCell<float> source,
-			in TopologyCell<float> destination,
-			Direction direction,
-			in TopologyCell<float> orthogonalA,
-			in TopologyCell<float> orthogonalB,
-			bool isSeam
-		) => destination.IsOccupied;
-	}
-
-	private sealed class Settings : IGridProjectionSettings {
-		public Settings( int iterations ) {
-			Iterations = iterations;
-		}
-		public int Iterations { get; }
-	}
 }

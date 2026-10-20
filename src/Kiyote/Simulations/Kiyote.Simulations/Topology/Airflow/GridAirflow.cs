@@ -44,7 +44,8 @@ public sealed class GridAirflow : IGridAirflow {
 		return new AirflowNeighbourhood( projection.Combined, projection, advection );
 	}
 
-	void IGridAirflow.Update(
+	void IGridAirflow.Update<TCell>(
+		ICompiledGridAssembly<TCell> compiled,
 		AirflowNeighbourhood neighbourhood,
 		IGridLayer<float> pressureSource,
 		IGridLayer<float> pressureDestination,
@@ -69,6 +70,7 @@ public sealed class GridAirflow : IGridAirflow {
 		ApplyPressureForce( neighbourhood.Pressure, pressureDestination, intermediateVelocityX, intermediateVelocityY );
 
 		_projection.Update(
+			compiled,
 			neighbourhood.Projection,
 			intermediateVelocityX,
 			intermediateVelocityY,

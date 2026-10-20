@@ -78,16 +78,16 @@ public sealed class GridAirflowTests {
 		_pressure.InSequence( sequence ).Setup( p => p.Update( neighbourhood.Pressure, pSrc, pDst ) );
 		_advection.InSequence( sequence ).Setup( a => a.Update( neighbourhood.Advection, vx, vy, vx, ix ) );
 		_advection.InSequence( sequence ).Setup( a => a.Update( neighbourhood.Advection, vx, vy, vy, iy ) );
-		_projection.InSequence( sequence ).Setup( p => p.Update( neighbourhood.Projection, ix, iy, dx, dy, pp, pps, div ) );
+		_projection.InSequence( sequence ).Setup( p => p.Update( _compiled, neighbourhood.Projection, ix, iy, dx, dy, pp, pps, div ) );
 		_advection.InSequence( sequence ).Setup( a => a.Update( neighbourhood.Advection, dx, dy, cSrc, cDst ) );
 
-		_airflow.Update( neighbourhood, pSrc, pDst, vx, vy, dx, dy, ix, iy, pp, pps, div, cSrc, cDst );
+		_airflow.Update( _compiled, neighbourhood, pSrc, pDst, vx, vy, dx, dy, ix, iy, pp, pps, div, cSrc, cDst );
 
 		using( Assert.EnterMultipleScope() ) {
 			_pressure.Verify( p => p.Update( neighbourhood.Pressure, pSrc, pDst ), Times.Once );
 			_advection.Verify( a => a.Update( neighbourhood.Advection, vx, vy, vx, ix ), Times.Once );
 			_advection.Verify( a => a.Update( neighbourhood.Advection, vx, vy, vy, iy ), Times.Once );
-			_projection.Verify( p => p.Update( neighbourhood.Projection, ix, iy, dx, dy, pp, pps, div ), Times.Once );
+			_projection.Verify( p => p.Update( _compiled, neighbourhood.Projection, ix, iy, dx, dy, pp, pps, div ), Times.Once );
 			_advection.Verify( a => a.Update( neighbourhood.Advection, dx, dy, cSrc, cDst ), Times.Once );
 		}
 	}
@@ -105,9 +105,10 @@ public sealed class GridAirflowTests {
 		IGridLayer<float> iy = Layer<float>();
 		_pressure.Setup( p => p.Update( It.IsAny<IGridLayer<Direction>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>() ) );
 		_advection.Setup( a => a.Update( It.IsAny<AdvectionNeighbourhood>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>() ) );
-		_projection.Setup( p => p.Update( It.IsAny<ProjectionNeighbourhood>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>() ) );
+		_projection.Setup( p => p.Update( _compiled, It.IsAny<ProjectionNeighbourhood>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>() ) );
 
 		_airflow.Update(
+			_compiled,
 			neighbourhood,
 			Layer<float>(), pressure,
 			Layer<float>(), Layer<float>(),

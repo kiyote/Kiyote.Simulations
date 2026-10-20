@@ -182,6 +182,7 @@ public sealed class GridAirflowTests {
 		) {
 			for( int i = 0; i < steps; i++ ) {
 				airflow.Update(
+					_compiled,
 					_neighbourhood,
 					Pressure, _pressureScratch,
 					VelocityX, VelocityY,

@@ -282,7 +282,75 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   Full rebuilds intentionally allocate (127985 B dense, 217876 B sparse); these
   are outside unchanged-topology steady state. No new steady-state allocation
   was measured.
-- W5-W8 optional performance experiments have not started. W5 is next; retain
+- W5: completed and retained for the representative retained-empty-chunk, low
+  odd-iteration workload. Projection and airflow Update accept the explicit
+  generic compiled owner first, with all production, test, benchmark and
+  visualizer consumers wired. Odd solves use the owner's pressure/scratch storage
+  swap; even solves need no final swap. Numerical kernels remain non-generic.
+  Bound pressure identity, dirty flags and warm starts are preserved, and the
+  gradient stage acquires spans after the swap. No context, delegate, internal
+  layer cast or upstream dependency change was introduced.
+- W5 validation: 46 new cases cover zero/one/two/three/20/21 iterations, repeated
+  warm starts with and without intervening commits, exact bound pressure output
+  and commit counts, unchanged unrelated cell values, negative coordinates and
+  chunk seams, retained empty chunks, entirely empty compilations, solved
+  gradients and zero warmed allocations for odd/even cases at chunk sizes 32/64.
+  The pre-existing projection fixture now uses one compiled owner for all layers
+  instead of three coincident layouts. Negative iterations are rejected at
+  construction: an odd negative count otherwise skips relaxation but would swap
+  an unsolved scratch buffer into pressure. Zero retains its existing no-relaxation
+  behavior. All 435 tests pass in Debug and Release, with no build warnings/errors.
+- W5 measurements: matched A1 -> B1 -> B2 -> A2 runs of all 15 core benchmark
+  cases, using identical benchmark workloads/configuration and published
+  dependencies. A1/A2 used preserved baseline Release binaries; B1/B2 used the
+  owner-swap candidate. The final constructor-only negative-iteration guard is
+  outside timed work; the measured valid-configuration Update body is unchanged.
+  Same MediumRun/InProcessNoEmit, 10 warmups/15 measurements, host and runtime as
+  W4; no other build/test/benchmark ran concurrently. Reports remain under
+  `BenchmarkDotNet.Artifacts/correctness-w5-{A1,B1,B2,A2}`.
+  Projection and composed airflow keep the original 100x100 occupied field with
+  32x32 chunks, and now parameterize 1/20/21 iterations and 0/128 retained empty
+  chunks. Empty chunks are produced by compiling occupied cells in additional
+  chunks and removing those cells through the live assembly; setup verifies the
+  exact empty-chunk count. Timed calls perform the full solve/composition and
+  caller velocity/concentration swaps, not an isolated copy/swap microbenchmark.
+
+  | Workload (all times us) | Iterations | Empty chunks | A1 | A2 | B1 | B2 | Mean time change |
+  |------------------------|-----------:|-------------:|---:|---:|---:|---:|-----------------:|
+  | Projection | 1 | 0 | 103.6 | 103.5 | 103.6 | 100.1 | -1.6% |
+  | Projection | 1 | 128 | 139.9 | 140.7 | 104.7 | 103.1 | -25.9% |
+  | Projection | 20 | 0 | 571.2 | 522.9 | 547.2 | 545.7 | -0.1% |
+  | Projection | 20 | 128 | 623.1 | 553.3 | 602.5 | 593.6 | +1.7% |
+  | Projection | 21 | 0 | 596.6 | 531.8 | 593.3 | 583.5 | +4.3% |
+  | Projection | 21 | 128 | 684.3 | 610.5 | 632.9 | 634.6 | -2.1% |
+  | Airflow | 1 | 0 | 327.3 | 335.8 | 326.2 | 326.6 | -1.6% |
+  | Airflow | 1 | 128 | 379.9 | 390.0 | 336.2 | 327.8 | -13.8% |
+  | Airflow | 20 | 0 | 816.0 | 774.8 | 786.1 | 839.4 | +2.2% |
+  | Airflow | 20 | 128 | 883.6 | 791.0 | 857.5 | 860.0 | +2.6% |
+  | Airflow | 21 | 0 | 775.6 | 780.6 | 831.5 | 806.6 | +5.3% |
+  | Airflow | 21 | 128 | 898.6 | 937.4 | 887.8 | 818.9 | -7.0% |
+  | Diffusion control | - | - | 27.78 | 24.92 | 26.65 | 26.77 | +1.4% |
+  | Pressure control | - | - | 27.14 | 26.51 | 26.96 | 26.59 | -0.2% |
+  | Advection control | - | - | 53.81 | 54.04 | 53.67 | 53.21 | -0.9% |
+
+  Changes compare the arithmetic means of the two candidate and two baseline
+  run means, not pooled statistical estimates. The retained-empty-chunk one-
+  iteration projection and complete airflow cases improve by more than 10% in
+  both candidate runs even against the faster baseline run. Normal dense and
+  high-iteration cases show no reliable improvement. Dense 21-iteration cases
+  averaged 4.3% slower for projection and 5.3% slower for airflow; these are
+  observed costs, not erased by the sparse win. High-iteration results are noisy,
+  with bimodal-distribution warnings in A2; no greater-than-10% slowdown is
+  confirmed across the repeated comparisons. Adoption is specific to the
+  demonstrated workload, not a claim to fix diffusion's historical regression.
+- W5 allocation gates: both projection and airflow benchmark setups warm 100
+  calls and require exactly zero current-thread managed bytes over another 100
+  for all six parameter combinations each. All four runs pass, as do the new
+  focused odd/even allocation tests. Separate in-process B2 allocation figures
+  (projection 1-6 B/call; airflow 2-6 B/call) are retained honestly in
+  `BENCHMARK.md`, which records B2 core statistics. W4 LowFidelity tables remain
+  unchanged because those workloads were not rerun for W5.
+- W6-W8 optional performance experiments have not started. W6 is next; retain
   each candidate only if matched, repeated measurements meet D6/D7.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation
