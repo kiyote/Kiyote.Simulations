@@ -17,7 +17,7 @@ namespace Kiyote.Simulations.Topology.Projection;
 // vectorized in blocks of 16 cells, with a scalar tail.
 public sealed class GridProjection : IGridProjection {
 
-	// See the non-vectorized GridProjection for the derivation of this constant.
+	// Scales the eight-direction divergence for the Jacobi pressure solve.
 	private const float PoissonScale = 8.235294f;
 	private const int DirectionCount = 8;
 	private const float Diagonal = 0.7071068f;
@@ -54,11 +54,11 @@ public sealed class GridProjection : IGridProjection {
 	) {
 		IGridLayer<Direction> vacuum = compiled.CreateVacuumLayer();
 		IGridLayer<Direction> combined = compiled.CreateLayer<Direction>();
-		ChunkedGridLayout layout = compiled.ChunkLayout;
+		GridLayout layout = compiled.ChunkLayout;
 		foreach( int chunk in layout.EnumerateChunks() ) {
-			ReadOnlySpan<Direction> passable = connectivity.Values.GetValues( chunk );
-			ReadOnlySpan<Direction> missing = vacuum.Values.GetValues( chunk );
-			Span<Direction> output = combined.Values.GetValues( chunk );
+			ReadOnlySpan<Direction> passable = connectivity.GetValues( chunk );
+			ReadOnlySpan<Direction> missing = vacuum.GetValues( chunk );
+			Span<Direction> output = combined.GetValues( chunk );
 			for( int i = 0; i < output.Length; i++ ) {
 				output[i] = passable[i] | missing[i];
 			}
@@ -90,8 +90,13 @@ public sealed class GridProjection : IGridProjection {
 				(relaxationSource, relaxationDestination) = (relaxationDestination, relaxationSource);
 			}
 			if( ( _iterations & 1 ) == 1 ) {
-				relaxationSource.Values.CopyTo( pressure.Values );
-				MarkAll( pressure );
+				GridLayout layout = pressure.Layout;
+				foreach( int chunk in layout.EnumerateChunks() ) {
+					relaxationSource.GetValues( chunk ).CopyTo( pressure.GetValues( chunk ) );
+					if( layout.GetFill( chunk ) != ChunkFill.Empty ) {
+						pressure.MarkDirty( chunk );
+					}
+				}
 			}
 
 			SubtractGradient( neighbourhood.Combined, pressure, sourceVelocityX, sourceVelocityY, destinationVelocityX, destinationVelocityY, scratchA );
@@ -109,12 +114,12 @@ public sealed class GridProjection : IGridProjection {
 		float[] scratchX,
 		float[] scratchY
 	) {
-		ChunkedGridLayer<Direction> passableValues = neighbourhood.Passable.Values;
-		ChunkedGridLayer<Direction> combinedValues = neighbourhood.Combined.Values;
-		ChunkedGridLayer<float> sourceXValues = sourceX.Values;
-		ChunkedGridLayer<float> sourceYValues = sourceY.Values;
-		ChunkedGridLayer<float> divergenceValues = divergence.Values;
-		ChunkedGridLayout layout = sourceX.Layout;
+		IGridLayer<Direction> passableValues = neighbourhood.Passable;
+		IGridLayer<Direction> combinedValues = neighbourhood.Combined;
+		IGridLayer<float> sourceXValues = sourceX;
+		IGridLayer<float> sourceYValues = sourceY;
+		IGridLayer<float> divergenceValues = divergence;
+		GridLayout layout = sourceX.Layout;
 		int size = layout.ChunkSize;
 		int stride = size + ( 2 * Halo );
 		Span<int> offsets = stackalloc int[DirectionCount];
@@ -217,11 +222,11 @@ public sealed class GridProjection : IGridProjection {
 		IGridLayer<float> divergence,
 		float[] scratch
 	) {
-		ChunkedGridLayer<Direction> flagValues = neighbourhood.Values;
-		ChunkedGridLayer<float> sourceValues = source.Values;
-		ChunkedGridLayer<float> divergenceValues = divergence.Values;
-		ChunkedGridLayer<float> destinationValues = destination.Values;
-		ChunkedGridLayout layout = source.Layout;
+		IGridLayer<Direction> flagValues = neighbourhood;
+		IGridLayer<float> sourceValues = source;
+		IGridLayer<float> divergenceValues = divergence;
+		IGridLayer<float> destinationValues = destination;
+		GridLayout layout = source.Layout;
 		int size = layout.ChunkSize;
 		int stride = size + ( 2 * Halo );
 		Span<int> offsets = stackalloc int[DirectionCount];
@@ -314,13 +319,13 @@ public sealed class GridProjection : IGridProjection {
 		IGridLayer<float> destinationY,
 		float[] scratch
 	) {
-		ChunkedGridLayer<Direction> flagValues = neighbourhood.Values;
-		ChunkedGridLayer<float> pressureValues = pressure.Values;
-		ChunkedGridLayer<float> sourceXValues = sourceX.Values;
-		ChunkedGridLayer<float> sourceYValues = sourceY.Values;
-		ChunkedGridLayer<float> destinationXValues = destinationX.Values;
-		ChunkedGridLayer<float> destinationYValues = destinationY.Values;
-		ChunkedGridLayout layout = pressure.Layout;
+		IGridLayer<Direction> flagValues = neighbourhood;
+		IGridLayer<float> pressureValues = pressure;
+		IGridLayer<float> sourceXValues = sourceX;
+		IGridLayer<float> sourceYValues = sourceY;
+		IGridLayer<float> destinationXValues = destinationX;
+		IGridLayer<float> destinationYValues = destinationY;
+		GridLayout layout = pressure.Layout;
 		int size = layout.ChunkSize;
 		int stride = size + ( 2 * Halo );
 		Span<int> offsets = stackalloc int[DirectionCount];
@@ -421,17 +426,6 @@ public sealed class GridProjection : IGridProjection {
 	) {
 		for( int d = 0; d < DirectionCount; d++ ) {
 			offsets[d] = ( _deltaRows[d] * stride ) + _deltaColumns[d];
-		}
-	}
-
-	private static void MarkAll(
-		IGridLayer<float> layer
-	) {
-		ChunkedGridLayout layout = layer.Layout;
-		foreach( int chunk in layout.EnumerateChunks() ) {
-			if( layout.GetFill( chunk ) != ChunkFill.Empty ) {
-				layer.MarkDirty( chunk );
-			}
 		}
 	}
 

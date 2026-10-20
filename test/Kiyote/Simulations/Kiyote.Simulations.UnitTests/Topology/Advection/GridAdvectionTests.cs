@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.Topology.Advection;
 using Moq;
@@ -34,46 +33,50 @@ public sealed class GridAdvectionTests {
 
 	[Test]
 	public void Update_StillVelocity_CopiesSourceAndMarksDestinationDirty() {
-		ChunkedGridLayout layout = new ChunkedGridLayout( ChunkSize );
-		for( int row = 0; row < ChunkSize; row++ ) {
-			layout.SetPopulatedRun( 0, row, ChunkSize );
-		}
-		int chunk = layout.GetOrCreateChunk( 0, 0 );
-		Mock<IGridLayer<float>> destination = Layer<float>( layout );
-		Mock<IGridLayer<float>> source = Layer<float>( layout );
-		Span<float> values = source.Object.Values.GetValues( chunk );
+		using ICompiledGridAssembly<float> compiled = Compile( full: true );
+		Assert.That( compiled.ChunkLayout.TryGetChunk( 0, 0, out int chunk ), Is.True );
+		IGridLayer<float> destination = compiled.CreateLayer<float>();
+		IGridLayer<float> source = compiled.CreateLayer<float>();
+		Span<float> values = source.GetValues( chunk );
 		for( int i = 0; i < values.Length; i++ ) {
 			values[i] = i;
 		}
-		AdvectionNeighbourhood neighbourhood = new AdvectionNeighbourhood( Layer<Direction>( layout ).Object, Layer<Direction>( layout ).Object );
+		AdvectionNeighbourhood neighbourhood = new AdvectionNeighbourhood( compiled.CreateLayer<Direction>(), compiled.CreateLayer<Direction>() );
 
-		_advection.Update( neighbourhood, Layer<float>( layout ).Object, Layer<float>( layout ).Object, source.Object, destination.Object );
+		_advection.Update( neighbourhood, compiled.CreateLayer<float>(), compiled.CreateLayer<float>(), source, destination );
 
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( destination.Object.Values.GetValues( chunk ).ToArray(), Is.EqualTo( values.ToArray() ) );
-			destination.Verify( l => l.MarkDirty( chunk ), Times.Once );
+			Assert.That( destination.GetValues( chunk ).ToArray(), Is.EqualTo( values.ToArray() ) );
+			Assert.That( destination.IsDirty( chunk ), Is.True );
 		}
 	}
 
 	[Test]
 	public void Update_EmptyChunk_Skipped() {
-		ChunkedGridLayout layout = new ChunkedGridLayout( ChunkSize );
-		int chunk = layout.GetOrCreateChunk( 0, 0 );
-		Mock<IGridLayer<float>> destination = Layer<float>( layout );
-		AdvectionNeighbourhood neighbourhood = new AdvectionNeighbourhood( Layer<Direction>( layout ).Object, Layer<Direction>( layout ).Object );
+		using ICompiledGridAssembly<float> compiled = Compile( full: false );
+		Assert.That( compiled.ChunkLayout.TryGetChunk( 0, 0, out int chunk ), Is.True );
+		Assert.That( compiled.Assembly.TryRemoveCell( compiled.Assembly.Placements[0].Id, 0, 0 ), Is.True );
+		IGridLayer<float> destination = compiled.CreateLayer<float>();
+		AdvectionNeighbourhood neighbourhood = new AdvectionNeighbourhood( compiled.CreateLayer<Direction>(), compiled.CreateLayer<Direction>() );
 
-		_advection.Update( neighbourhood, Layer<float>( layout ).Object, Layer<float>( layout ).Object, Layer<float>( layout ).Object, destination.Object );
+		_advection.Update( neighbourhood, compiled.CreateLayer<float>(), compiled.CreateLayer<float>(), compiled.CreateLayer<float>(), destination );
 
-		destination.Verify( l => l.MarkDirty( chunk ), Times.Never );
+		Assert.That( destination.IsDirty( chunk ), Is.False );
 	}
 
-	private static Mock<IGridLayer<T>> Layer<T>(
-		ChunkedGridLayout layout
-	) where T : unmanaged {
-		Mock<IGridLayer<T>> layer = new Mock<IGridLayer<T>>();
-		layer.Setup( l => l.Layout ).Returns( layout );
-		layer.Setup( l => l.Values ).Returns( new ChunkedGridLayer<T>( layout ) );
-		return layer;
+	private static ICompiledGridAssembly<float> Compile(
+		bool full
+	) {
+		DenseGridSource<float> source = new DenseGridSource<float>( ChunkSize, ChunkSize );
+		int size = full ? ChunkSize : 1;
+		for( int row = 0; row < size; row++ ) {
+			for( int column = 0; column < size; column++ ) {
+				_ = source.TrySetCell( column, row, 0f );
+			}
+		}
+		IGridAssembly<float> assembly = new GridAssembly<float>();
+		Assert.That( assembly.TryAttach( source, 0, 0 ).Succeeded, Is.True );
+		return new GridCompiler().Compile( assembly, ChunkSize );
 	}
 
 }

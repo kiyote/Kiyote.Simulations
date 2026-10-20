@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
@@ -96,7 +95,7 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 			RebuildStructure();
 		}
 		if( _solarStale ) {
-			_solar.Illuminate( _compiled.ChunkLayout, _sunDirection, _settings.SolarFlux, _absorptivity.Values, _vacuum.Values, _solarPower.Values );
+			_solar.Illuminate( _compiled.ChunkLayout, _sunDirection, _settings.SolarFlux, _absorptivity, _vacuum, _solarPower );
 			_solarStale = false;
 		}
 
@@ -125,11 +124,11 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 		if( !_compiled.ChunkLayout.TryLocate( column, row, out int chunk, out int local ) ) {
 			return;
 		}
-		float capacity = _capacity.Values.GetValues( chunk )[local];
+		float capacity = _capacity.GetValues( chunk )[local];
 		if( capacity <= 0.0f ) {
 			return;
 		}
-		ref float t = ref _temperature.Values.GetValues( chunk )[local];
+		ref float t = ref _temperature.GetValues( chunk )[local];
 		t = MathF.Max( 0.0f, t + ( joules / capacity ) );
 		_temperature.MarkDirty( chunk );
 	}
@@ -206,13 +205,13 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 	private void Step(
 		float dt
 	) {
-		ChunkedGridLayout layout = _compiled.ChunkLayout;
+		GridLayout layout = _compiled.ChunkLayout;
 		foreach( int chunk in layout.EnumerateChunks() ) {
 			if( IsEmpty( layout, chunk ) ) {
 				continue;
 			}
 			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
-			Span<float> next = _temperatureNext.Values.GetValues( chunk );
+			Span<float> next = _temperatureNext.GetValues( chunk );
 			Gather( _temperature, chunk, _temperaturePadded );
 			Gather( _conductivity, chunk, _conductivityPadded );
 			Gather( _capacity, chunk, _capacityPadded );
@@ -222,10 +221,10 @@ internal sealed class Thermal<TCell, TStrategy> : IThermal
 				dt,
 				_settings.StefanBoltzmann,
 				_settings.SpaceTemperature,
-				_emissivity.Values.GetValues( chunk ),
-				_capacity.Values.GetValues( chunk ),
-				_solarPower.Values.GetValues( chunk ),
-				_vacuum.Values.GetValues( chunk ),
+				_emissivity.GetValues( chunk ),
+				_capacity.GetValues( chunk ),
+				_solarPower.GetValues( chunk ),
+				_vacuum.GetValues( chunk ),
 				next
 			);
 		}

@@ -1,3 +1,4 @@
+using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
 using Kiyote.Simulations.LowFidelity.Atmospherics.UnitTests;
 using Kiyote.Simulations.LowFidelity.Thermals;
@@ -13,16 +14,20 @@ internal sealed class AtmosphericThermalsConvectionTests {
 	private IAtmosphericThermalsConvection _convection;
 	private Mock<IAtmosphere> _atmosphere;
 	private Mock<IThermal> _thermal;
-	private TestGridLayer<float> _gasTemperature;
-	private TestGridLayer<float> _structureTemperature;
+	private ICompiledGridAssembly<float> _compiled;
+	private IGridLayer<float> _gasTemperature;
+	private IGridLayer<float> _structureTemperature;
 
 	[SetUp]
 	public void SetUp() {
 		_convection = new AtmosphericThermalsConvection();
-		_gasTemperature = new TestGridLayer<float>( TestGridLayout.Create( 2, 1 ) );
-		_gasTemperature.Fill( 300.0f );
-		_structureTemperature = new TestGridLayer<float>( _gasTemperature.Layout );
-		_structureTemperature.Fill( 290.0f );
+		_compiled = TestGridAssembly.Create( 2, 1 );
+		_gasTemperature = _compiled.CreateLayer<float>();
+		_structureTemperature = _compiled.CreateLayer<float>();
+		for( int column = 0; column < 2; column++ ) {
+			_gasTemperature[column, 0] = 300.0f;
+			_structureTemperature[column, 0] = 290.0f;
+		}
 		_atmosphere = new Mock<IAtmosphere>( MockBehavior.Strict );
 		_atmosphere.Setup( a => a.Temperature ).Returns( _gasTemperature );
 		_atmosphere.Setup( a => a.GetTotalGas( 0, 0 ) ).Returns( 1.0f );
@@ -32,6 +37,11 @@ internal sealed class AtmosphericThermalsConvectionTests {
 		_thermal = new Mock<IThermal>( MockBehavior.Strict );
 		_thermal.Setup( t => t.Temperature ).Returns( _structureTemperature );
 		_thermal.Setup( t => t.AddEnergy( It.IsAny<int>(), It.IsAny<int>(), It.IsAny<float>() ) );
+	}
+
+	[TearDown]
+	public void TearDown() {
+		_compiled.Dispose();
 	}
 
 	[Test]

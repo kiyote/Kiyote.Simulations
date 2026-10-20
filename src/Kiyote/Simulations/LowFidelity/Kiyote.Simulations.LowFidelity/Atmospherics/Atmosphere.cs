@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
@@ -154,7 +153,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		if( !TryLocate( column, row, out int chunk, out int local ) ) {
 			return new Vector();
 		}
-		return new Vector( _windX.Values.GetValues( chunk )[local], _windY.Values.GetValues( chunk )[local] );
+		return new Vector( _windX.GetValues( chunk )[local], _windY.GetValues( chunk )[local] );
 	}
 
 	int IAtmosphere.Update(
@@ -215,12 +214,12 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			return;
 		}
 		float total = GetTotal( chunk, local );
-		ref float t = ref _temperature.Values.GetValues( chunk )[local];
+		ref float t = ref _temperature.GetValues( chunk )[local];
 		float incoming = temperature ?? t;
 		t = total + amount > 0.0f
 			? ( ( total * t ) + ( amount * incoming ) ) / ( total + amount )
 			: incoming;
-		_gas[gas.Value].Values.GetValues( chunk )[local] += amount;
+		_gas[gas.Value].GetValues( chunk )[local] += amount;
 		Touch( chunk, _gas[gas.Value] );
 		Touch( chunk, _temperature );
 	}
@@ -234,7 +233,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		if( amount <= 0.0f || !TryLocate( column, row, out int chunk, out int local ) ) {
 			return 0.0f;
 		}
-		ref float value = ref _gas[gas.Value].Values.GetValues( chunk )[local];
+		ref float value = ref _gas[gas.Value].GetValues( chunk )[local];
 		float removed = MathF.Min( amount, value );
 		value -= removed;
 		Touch( chunk, _gas[gas.Value] );
@@ -254,7 +253,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			return 0.0f;
 		}
 		float capacity = total * _settings.HeatCapacity;
-		ref float t = ref _temperature.Values.GetValues( chunk )[local];
+		ref float t = ref _temperature.GetValues( chunk )[local];
 		float next = MathF.Max( MinimumTemperature, t + ( joules / capacity ) );
 		float applied = ( next - t ) * capacity;
 		t = next;
@@ -279,7 +278,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		if( amount <= 0.0f || !TryLocate( column, row, out int chunk, out int local ) ) {
 			return;
 		}
-		layer.Values.GetValues( chunk )[local] += amount;
+		layer.GetValues( chunk )[local] += amount;
 		Touch( chunk, layer );
 	}
 
@@ -293,7 +292,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		if( amount <= 0.0f || !TryLocate( column, row, out int chunk, out int local ) ) {
 			return 0.0f;
 		}
-		ref float value = ref layer.Values.GetValues( chunk )[local];
+		ref float value = ref layer.GetValues( chunk )[local];
 		float removed = MathF.Min( amount, value );
 		value -= removed;
 		Touch( chunk, layer );
@@ -309,7 +308,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			return 0.0f;
 		}
 		float total = GetTotal( chunk, local );
-		return total > 0.0f ? _gas[gas.Value].Values.GetValues( chunk )[local] / total : 0.0f;
+		return total > 0.0f ? _gas[gas.Value].GetValues( chunk )[local] / total : 0.0f;
 	}
 
 	void IDisposable.Dispose() {
@@ -384,7 +383,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		if( !_pendingFullRebuild && _pendingAreas.Count == 0 ) {
 			return;
 		}
-		ChunkedGridLayout layout = _compiled.ChunkLayout;
+		GridLayout layout = _compiled.ChunkLayout;
 		_compiled.Commit();
 
 		long covered = 0;
@@ -420,7 +419,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	private void Wake(
 		Rect area
 	) {
-		ChunkedGridLayout layout = _compiled.ChunkLayout;
+		GridLayout layout = _compiled.ChunkLayout;
 		int shift = layout.ChunkShift;
 		for( int cy = ( area.Y1 - 1 ) >> shift; cy <= ( area.Y2 + 1 ) >> shift; cy++ ) {
 			for( int cx = ( area.X1 - 1 ) >> shift; cx <= ( area.X2 + 1 ) >> shift; cx++ ) {
@@ -441,7 +440,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		}
 
 		// Wind in neighbouring chunks reads these chunks' flows across the chunk border.
-		ChunkedGridLayout layout = _compiled.ChunkLayout;
+		GridLayout layout = _compiled.ChunkLayout;
 		foreach( int chunk in _work ) {
 			foreach( int neighbour in layout.GetNeighbours( chunk ) ) {
 				if( neighbour >= 0 ) {
@@ -452,9 +451,9 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 
 		foreach( int chunk in _work ) {
 			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
-			Span<float> total = _total.Values.GetValues( chunk );
+			Span<float> total = _total.GetValues( chunk );
 			SumGas( presence, chunk, total );
-			_pressureStage.Compute( presence, total, _temperature.Values.GetValues( chunk ), _pressure.Values.GetValues( chunk ) );
+			_pressureStage.Compute( presence, total, _temperature.GetValues( chunk ), _pressure.GetValues( chunk ) );
 		}
 
 		float k = _settings.Acceleration * dt;
@@ -469,12 +468,12 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 				IsProcessed( neighbours[EastNeighbour] ),
 				IsProcessed( neighbours[SouthNeighbour] ),
 				_pressurePadded,
-				_flowEast.Values.GetValues( chunk ),
-				_flowSouth.Values.GetValues( chunk ),
-				_vent.Values.GetValues( chunk ),
-				_connectivity.Values.GetValues( chunk ),
-				_vacuum.Values.GetValues( chunk ),
-				_permeable.Values.GetValues( chunk )
+				_flowEast.GetValues( chunk ),
+				_flowSouth.GetValues( chunk ),
+				_vent.GetValues( chunk ),
+				_connectivity.GetValues( chunk ),
+				_vacuum.GetValues( chunk ),
+				_permeable.GetValues( chunk )
 			);
 		}
 
@@ -484,11 +483,11 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			_limiter.ComputeScale(
 				layout.GetPresence( chunk ),
 				dt,
-				_total.Values.GetValues( chunk ),
+				_total.GetValues( chunk ),
 				_flowEastPadded,
 				_flowSouthPadded,
-				_vent.Values.GetValues( chunk ),
-				_scale.Values.GetValues( chunk )
+				_vent.GetValues( chunk ),
+				_scale.GetValues( chunk )
 			);
 		}
 
@@ -496,9 +495,9 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			Gather( _scale, chunk, _scalePadded );
 			_limiter.Limit(
 				layout.GetPresence( chunk ),
-				_flowEast.Values.GetValues( chunk ),
-				_flowSouth.Values.GetValues( chunk ),
-				_vent.Values.GetValues( chunk ),
+				_flowEast.GetValues( chunk ),
+				_flowSouth.GetValues( chunk ),
+				_vent.GetValues( chunk ),
 				_scalePadded
 			);
 		}
@@ -509,21 +508,21 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 
 		foreach( int chunk in _work ) {
 			for( int g = 0; g < _gas.Length; g++ ) {
-				_gasNext[g].Values.GetValues( chunk ).CopyTo( _gas[g].Values.GetValues( chunk ) );
+				_gasNext[g].GetValues( chunk ).CopyTo( _gas[g].GetValues( chunk ) );
 				_gas[g].MarkDirty( chunk );
 			}
-			_temperatureNext.Values.GetValues( chunk ).CopyTo( _temperature.Values.GetValues( chunk ) );
+			_temperatureNext.GetValues( chunk ).CopyTo( _temperature.GetValues( chunk ) );
 			_temperature.MarkDirty( chunk );
 			if( !_active[chunk] ) {
-				_flowEast.Values.GetValues( chunk ).Clear();
-				_flowSouth.Values.GetValues( chunk ).Clear();
-				_vent.Values.GetValues( chunk ).Clear();
+				_flowEast.GetValues( chunk ).Clear();
+				_flowSouth.GetValues( chunk ).Clear();
+				_vent.GetValues( chunk ).Clear();
 			}
 		}
 	}
 
 	private void BuildWorkSet() {
-		ChunkedGridLayout layout = _compiled.ChunkLayout;
+		GridLayout layout = _compiled.ChunkLayout;
 		Array.Clear( _processed );
 		_work.Clear();
 		foreach( int chunk in layout.EnumerateChunks() ) {
@@ -564,24 +563,24 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 		Gather( _flowSouth, chunk, _flowSouthPadded );
 		Gather( _total, chunk, _totalPadded );
 		Gather( _temperature, chunk, _temperaturePadded );
-		_transport.Prepare( presence, dt, _flowEastPadded, _flowSouthPadded, _vent.Values.GetValues( chunk ), _outgoing, _newTotal );
+		_transport.Prepare( presence, dt, _flowEastPadded, _flowSouthPadded, _vent.GetValues( chunk ), _outgoing, _newTotal );
 		for( int g = 0; g < _gas.Length; g++ ) {
 			Gather( _gas[g], chunk, _gasPadded );
-			_transport.Transport( presence, dt, _gasPadded, _totalPadded, _flowEastPadded, _flowSouthPadded, _outgoing, _gasNext[g].Values.GetValues( chunk ), _newTotal );
+			_transport.Transport( presence, dt, _gasPadded, _totalPadded, _flowEastPadded, _flowSouthPadded, _outgoing, _gasNext[g].GetValues( chunk ), _newTotal );
 		}
 
-		Span<float> temperatureNext = _temperatureNext.Values.GetValues( chunk );
+		Span<float> temperatureNext = _temperatureNext.GetValues( chunk );
 		bool changing = _thermal.Mix(
 			presence,
 			dt,
 			conduction,
-			_total.Values.GetValues( chunk ),
+			_total.GetValues( chunk ),
 			_temperaturePadded,
 			temperatureNext,
 			_flowEastPadded,
 			_flowSouthPadded,
-			_vent.Values.GetValues( chunk ),
-			_connectivity.Values.GetValues( chunk ),
+			_vent.GetValues( chunk ),
+			_connectivity.GetValues( chunk ),
 			_outgoing,
 			_newTotal,
 			ref _vented
@@ -597,8 +596,8 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 				condensation,
 				_condensationPoints[g],
 				temperatureNext,
-				_gasNext[g].Values.GetValues( chunk ),
-				condensate.Values.GetValues( chunk ),
+				_gasNext[g].GetValues( chunk ),
+				condensate.GetValues( chunk ),
 				out bool modified
 			);
 			if( modified ) {
@@ -610,7 +609,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 
 	// Recomputes pressure and wind for chunks touched since the last publish, then publishes frames.
 	private void Publish() {
-		ChunkedGridLayout layout = _compiled.ChunkLayout;
+		GridLayout layout = _compiled.ChunkLayout;
 		float windScale = _settings.WindScale * 0.5f;
 
 		foreach( int chunk in layout.EnumerateChunks() ) {
@@ -619,19 +618,19 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 			}
 			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
 			// Pressure temporarily holds the total gas before being converted.
-			Span<float> pressure = _pressure.Values.GetValues( chunk );
+			Span<float> pressure = _pressure.GetValues( chunk );
 			SumGas( presence, chunk, pressure );
 			Gather( _flowEast, chunk, _flowEastPadded );
 			Gather( _flowSouth, chunk, _flowSouthPadded );
 			_wind.Publish(
 				presence,
 				windScale,
-				_temperature.Values.GetValues( chunk ),
+				_temperature.GetValues( chunk ),
 				_flowEastPadded,
 				_flowSouthPadded,
 				pressure,
-				_windX.Values.GetValues( chunk ),
-				_windY.Values.GetValues( chunk )
+				_windX.GetValues( chunk ),
+				_windY.GetValues( chunk )
 			);
 		}
 		Array.Clear( _publish );
@@ -646,7 +645,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	) {
 		total.Clear();
 		for( int g = 0; g < _gas.Length; g++ ) {
-			_pressureStage.Accumulate( presence, _gas[g].Values.GetValues( chunk ), total );
+			_pressureStage.Accumulate( presence, _gas[g].GetValues( chunk ), total );
 		}
 	}
 
@@ -663,7 +662,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere
 	) {
 		float total = 0.0f;
 		for( int g = 0; g < _gas.Length; g++ ) {
-			total += _gas[g].Values.GetValues( chunk )[local];
+			total += _gas[g].GetValues( chunk )[local];
 		}
 		return total;
 	}

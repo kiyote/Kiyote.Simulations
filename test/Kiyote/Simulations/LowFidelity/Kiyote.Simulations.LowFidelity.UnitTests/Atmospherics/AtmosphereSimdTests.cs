@@ -1,4 +1,4 @@
-using Kiyote.Buffers.ChunkedGrids;
+using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics.UnitTests;
 
@@ -14,11 +14,18 @@ public sealed class AtmosphereSimdTests {
 	) {
 		const int Size = AtmosphereSimd.ChunkSize;
 		// A 2x2 block of chunks plus a lone chunk with no neighbours.
-		ChunkedGridLayout layout = TestGridLayout.Create( Size * 2, Size * 2 );
-		_ = layout.SetPopulated( ( Size * 3 ) + 1, ( Size * 3 ) + 2 );
-		TestGridLayer<float> layer = new TestGridLayer<float>( layout );
+		DenseGridSource<float> source = new DenseGridSource<float>( Size * 4, Size * 4 );
+		for( int row = 0; row < Size * 2; row++ ) {
+			for( int column = 0; column < Size * 2; column++ ) {
+				_ = source.TrySetCell( column, row, 0f );
+			}
+		}
+		_ = source.TrySetCell( ( Size * 3 ) + 1, ( Size * 3 ) + 2, 0f );
+		using ICompiledGridAssembly<float> compiled = TestGridAssembly.Compile( source );
+		GridLayout layout = compiled.ChunkLayout;
+		IGridLayer<float> layer = compiled.CreateLayer<float>();
 		foreach( int chunk in layout.EnumerateChunks() ) {
-			Span<float> values = layer.Values.GetValues( chunk );
+			Span<float> values = layer.GetValues( chunk );
 			for( int i = 0; i < values.Length; i++ ) {
 				values[i] = ( ( chunk + 1 ) * 10000.0f ) + i;
 			}
@@ -26,7 +33,7 @@ public sealed class AtmosphereSimdTests {
 		Assert.That( layout.TryGetChunk( chunkColumn, chunkRow, out int target ), Is.True );
 		float[] expected = new float[AtmosphereSimd.PaddedArea];
 		float[] actual = new float[AtmosphereSimd.PaddedArea];
-		layer.Values.GetNeighbourhood( target ).CopyPadded( AtmosphereSimd.Halo, expected );
+		layer.CopyPadded( target, AtmosphereSimd.Halo, expected );
 
 		AtmosphereSimd.Gather( layer, target, actual );
 

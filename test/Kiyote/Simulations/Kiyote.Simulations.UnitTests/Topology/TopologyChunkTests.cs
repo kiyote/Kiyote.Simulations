@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.Topology.UnitTests;
@@ -9,16 +8,30 @@ public sealed class TopologyChunkTests {
 	private const int ChunkSize = 32;
 	private const int Stride = ChunkSize + 2;
 
-	private ChunkedGridLayout _layout;
+	private ICompiledGridAssembly<float> _compiled;
+	private GridLayout _layout;
 
 	[SetUp]
 	public void SetUp() {
 		// Chunks (0,0), (1,0), (0,1) and (1,1) plus a lone chunk at (3,3); (2,*) and (*,2) are missing.
-		_layout = new ChunkedGridLayout( ChunkSize );
+		DenseGridSource<float> source = new DenseGridSource<float>( ChunkSize * 2, ChunkSize * 2 );
 		for( int row = 0; row < ChunkSize * 2; row++ ) {
-			_ = _layout.SetPopulatedRun( 0, row, ChunkSize * 2 );
+			for( int column = 0; column < ChunkSize * 2; column++ ) {
+				_ = source.TrySetCell( column, row, 0f );
+			}
 		}
-		_ = _layout.SetPopulated( ( ChunkSize * 3 ) + 5, ( ChunkSize * 3 ) + 7 );
+		DenseGridSource<float> isolated = new DenseGridSource<float>( 1, 1 );
+		_ = isolated.TrySetCell( 0, 0, 0f );
+		IGridAssembly<float> assembly = new GridAssembly<float>();
+		Assert.That( assembly.TryAttach( source, 0, 0 ).Succeeded, Is.True );
+		Assert.That( assembly.TryAttach( isolated, ( ChunkSize * 3 ) + 5, ( ChunkSize * 3 ) + 7 ).Succeeded, Is.True );
+		_compiled = new GridCompiler().Compile( assembly, ChunkSize );
+		_layout = _compiled.ChunkLayout;
+	}
+
+	[TearDown]
+	public void TearDown() {
+		_compiled.Dispose();
 	}
 
 	[TestCase( 0, 0 )]
@@ -30,7 +43,7 @@ public sealed class TopologyChunkTests {
 		int chunkColumn,
 		int chunkRow
 	) {
-		ChunkedGridLayer<float> layer = new ChunkedGridLayer<float>( _layout );
+		IGridLayer<float> layer = _compiled.CreateLayer<float>();
 		Fill( layer, ( index, chunk ) => ( chunk * 10000.0f ) + index );
 
 		AssertMatches( layer, chunkColumn, chunkRow );
@@ -43,7 +56,7 @@ public sealed class TopologyChunkTests {
 		int chunkColumn,
 		int chunkRow
 	) {
-		ChunkedGridLayer<Direction> layer = new ChunkedGridLayer<Direction>( _layout );
+		IGridLayer<Direction> layer = _compiled.CreateLayer<Direction>();
 		Fill( layer, ( index, chunk ) => (Direction)( ( index + chunk ) & 0xFF ) );
 
 		AssertMatches( layer, chunkColumn, chunkRow );
@@ -51,7 +64,7 @@ public sealed class TopologyChunkTests {
 
 	[Test]
 	public void GatherPadded_OversizedScratch_LeavesTheRestUntouched() {
-		ChunkedGridLayer<float> layer = new ChunkedGridLayer<float>( _layout );
+		IGridLayer<float> layer = _compiled.CreateLayer<float>();
 		Assert.That( _layout.TryGetChunk( 0, 0, out int chunk ), Is.True );
 		float[] scratch = new float[( Stride * Stride ) + 4];
 		Array.Fill( scratch, -1.0f );
@@ -75,14 +88,14 @@ public sealed class TopologyChunkTests {
 	}
 
 	private void AssertMatches<T>(
-		ChunkedGridLayer<T> layer,
+		IGridLayer<T> layer,
 		int chunkColumn,
 		int chunkRow
 	) where T : unmanaged {
 		Assert.That( _layout.TryGetChunk( chunkColumn, chunkRow, out int chunk ), Is.True );
 		T[] expected = new T[Stride * Stride];
 		T[] actual = new T[Stride * Stride];
-		layer.GetNeighbourhood( chunk ).CopyPadded( 1, expected );
+		layer.CopyPadded( chunk, 1, expected );
 
 		TopologyChunk.GatherPadded( layer, chunk, actual );
 
@@ -90,7 +103,7 @@ public sealed class TopologyChunkTests {
 	}
 
 	private void Fill<T>(
-		ChunkedGridLayer<T> layer,
+		IGridLayer<T> layer,
 		Func<int, int, T> value
 	) where T : unmanaged {
 		foreach( int chunk in _layout.EnumerateChunks() ) {

@@ -1,95 +1,52 @@
 # Benchmarks
 
-```
-BenchmarkDotNet v0.15.8, Windows 11 (10.0.26100.9106/24H2/2024Update/HudsonValley)
+```text
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26100.9448/24H2/2024Update/HudsonValley)
 Intel Core i7-9700K CPU 3.60GHz (Coffee Lake), 1 CPU, 8 logical and 8 physical cores
-.NET SDK 10.0.401
-  [Host] : .NET 10.0.12 (10.0.12, 10.0.1226.42308), X64 RyuJIT x86-64-v3
+.NET SDK 11.0.100-rc.2.26504.105
+  [Host] : .NET 10.0.13 (10.0.13, 10.0.1326.50504), X64 RyuJIT x86-64-v3
 ```
 
-# GridDiffusion
-| Method | Mean     | Error     | StdDev    | Allocated |
-|------- |---------:|----------:|----------:|----------:|
-| Update | 1.054 ms | 0.0302 ms | 0.0282 ms |         - |
+## Topology.GridDiffusion
 
-# Vectorized.GridDiffusion
 | Method | Mean     | Error    | StdDev   | Allocated |
-|------- |---------:|---------:|---------:|----------:|
-| Update | 26.44 us | 0.194 us | 0.172 us |         - |
+|--------|---------:|---------:|---------:|----------:|
+| Update | 25.42 us | 0.558 us | 0.522 us |         - |
 
-# Topology.GridDiffusion
-| Method | Mean     | Error   | StdDev  | Allocated |
-|------- |---------:|--------:|--------:|----------:|
-| Update | 22.43 us | 0.619 us | 0.579 us |         - |
+## Topology.GridPressure
 
-# GridPressure
-| Method | Mean     | Error     | StdDev    | Allocated |
-|------- |---------:|----------:|----------:|----------:|
-| Update | 1.151 ms | 0.0281 ms | 0.0234 ms |         - |
-
-# Vectorized.GridPressure
 | Method | Mean     | Error    | StdDev   | Allocated |
-|------- |---------:|---------:|---------:|----------:|
-| Update | 27.36 us | 0.558 us | 0.522 us |         - |
+|--------|---------:|---------:|---------:|----------:|
+| Update | 27.34 us | 0.624 us | 0.584 us |         - |
 
-# Topology.GridPressure
+## Topology.GridProjection
+
+| Method | Mean     | Error   | StdDev  | Allocated |
+|--------|---------:|--------:|--------:|----------:|
+| Update | 555.0 us | 7.73 us | 6.85 us |       5 B |
+
+## Topology.GridAdvection
+
 | Method | Mean     | Error    | StdDev   | Allocated |
-|------- |---------:|---------:|---------:|----------:|
-| Update | 23.22 us | 0.727 us | 0.644 us |         - |
+|--------|---------:|---------:|---------:|----------:|
+| Update | 51.97 us | 1.316 us | 1.166 us |         - |
 
-# GridProjection
+## Topology.GridAirflow
+
 | Method | Mean     | Error    | StdDev   | Allocated |
-|------- |---------:|---------:|---------:|----------:|
-| Update | 16.34 ms | 0.226 ms | 0.211 ms |         - |
+|--------|---------:|---------:|---------:|----------:|
+| Update | 765.4 us | 23.98 us | 20.03 us |       5 B |
 
-# Vectorized.GridProjection
-| Method | Mean     | Error     | StdDev    | Allocated |
-|------- |---------:|----------:|----------:|----------:|
-| Update | 1.063 ms | 0.0336 ms | 0.0314 ms |       9 B |
+## LowFidelity.Atmosphere
 
-# Topology.GridProjection
-| Method | Mean     | Error   | StdDev  | Allocated |
-|------- |---------:|--------:|--------:|----------:|
-| Update | 563.8 us | 28.10 us | 26.29 us |       6 B |
+| Method            | Mean      | Error    | StdDev   | Allocated |
+|-------------------|----------:|---------:|---------:|----------:|
+| Update            | 262.11 us | 9.045 us | 8.461 us |         - |
+| ReadPressureFrame |  16.09 us | 0.274 us | 0.257 us |         - |
 
-# GridAdvection
-| Method | Mean     | Error   | StdDev  | Allocated |
-|------- |---------:|--------:|--------:|----------:|
-| Update | 339.9 us | 7.92 us | 7.41 us |         - |
+## LowFidelity.Thermal
 
-# Vectorized.GridAdvection
-| Method | Mean     | Error   | StdDev  | Allocated |
-|------- |---------:|--------:|--------:|----------:|
-| Update | 135.1 us | 1.95 us | 1.63 us |       1 B |
-
-# Topology.GridAdvection
-| Method | Mean     | Error   | StdDev  | Allocated |
-|------- |---------:|--------:|--------:|----------:|
-| Update | 52.28 us | 1.513 us | 1.415 us |         - |
-
-# GridAirflow
-| Method | Mean     | Error    | StdDev   | Allocated |
-|------- |---------:|---------:|---------:|----------:|
-| Update | 20.89 ms | 0.459 ms | 0.384 ms |         - |
-
-# Vectorized.GridAirflow
-| Method | Mean     | Error     | StdDev    | Allocated |
-|------- |---------:|----------:|----------:|----------:|
-| Update | 1.425 ms | 0.0316 ms | 0.0296 ms |      10 B |
-
-# Topology.GridAirflow
-| Method | Mean     | Error     | StdDev    | Allocated |
-|------- |---------:|----------:|----------:|----------:|
-| Update | 756.3 us | 24.20 us | 22.63 us |       6 B |
-
-# LowFidelity.Atmosphere
-| Method            | Mean      | Error     | StdDev    | Allocated |
-|------------------ |----------:|----------:|----------:|----------:|
-| Update            | 246.15 us |  8.499 us |  7.950 us |         - |
-| ReadPressureFrame |  15.27 us |  0.324 us |  0.303 us |         - |
-
-# LowFidelity.Thermal
 | Method              | Mean     | Error   | StdDev  | Allocated |
-|-------------------- |---------:|--------:|--------:|----------:|
-| Update              | 197.7 us | 5.43 us | 5.08 us |         - |
-| UpdateWithMovingSun | 231.6 us | 8.28 us | 7.34 us |       1 B |
+|---------------------|---------:|--------:|--------:|----------:|
+| Update              | 209.4 us | 4.65 us | 4.35 us |       1 B |
+| UpdateWithMovingSun | 233.9 us | 6.30 us | 5.89 us |       3 B |

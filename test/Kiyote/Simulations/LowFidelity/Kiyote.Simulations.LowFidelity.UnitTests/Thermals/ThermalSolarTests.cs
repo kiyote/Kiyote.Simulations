@@ -1,6 +1,6 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
+using Kiyote.Simulations.LowFidelity.Atmospherics.UnitTests;
 
 namespace Kiyote.Simulations.LowFidelity.Thermals.UnitTests;
 
@@ -18,27 +18,27 @@ public sealed class ThermalSolarTests {
 
 	[Test]
 	public void Illuminate_SunToTheEast_OnlyEastFaceIsLit() {
-		Hull hull = new Hull( (0, 0), (1, 0), (2, 0) );
+		using Hull hull = new Hull( (0, 0), (1, 0), (2, 0) );
 
 		Illuminate( hull, new Vector( 1.0f, 0.0f ) );
 
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( hull.Solar.GetReference( 2, 0 ), Is.EqualTo( Flux ).Within( 1e-3f ) );
-			Assert.That( hull.Solar.GetReference( 1, 0 ), Is.Zero );
-			Assert.That( hull.Solar.GetReference( 0, 0 ), Is.Zero );
+			Assert.That( hull.Solar[2, 0], Is.EqualTo( Flux ).Within( 1e-3f ) );
+			Assert.That( hull.Solar[1, 0], Is.Zero );
+			Assert.That( hull.Solar[0, 0], Is.Zero );
 		}
 	}
 
 	[Test]
 	public void Illuminate_SunToTheNorth_EveryNorthFaceIsLit() {
-		Hull hull = new Hull( (0, 0), (1, 0), (2, 0) );
+		using Hull hull = new Hull( (0, 0), (1, 0), (2, 0) );
 
 		Illuminate( hull, new Vector( 0.0f, -1.0f ) );
 
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( hull.Solar.GetReference( 0, 0 ), Is.EqualTo( Flux ).Within( 1e-3f ) );
-			Assert.That( hull.Solar.GetReference( 1, 0 ), Is.EqualTo( Flux ).Within( 1e-3f ) );
-			Assert.That( hull.Solar.GetReference( 2, 0 ), Is.EqualTo( Flux ).Within( 1e-3f ) );
+			Assert.That( hull.Solar[0, 0], Is.EqualTo( Flux ).Within( 1e-3f ) );
+			Assert.That( hull.Solar[1, 0], Is.EqualTo( Flux ).Within( 1e-3f ) );
+			Assert.That( hull.Solar[2, 0], Is.EqualTo( Flux ).Within( 1e-3f ) );
 		}
 	}
 
@@ -46,24 +46,24 @@ public sealed class ThermalSolarTests {
 	public void Illuminate_CellShadedFromAnotherChunk_IsNotLit() {
 		// The upper cell sits in the chunk above and shades the lower one.
 		const int Border = AtmosphereSimd.ChunkSize;
-		Hull hull = new Hull( (0, Border - 1), (0, Border + 1) );
+		using Hull hull = new Hull( (0, Border - 1), (0, Border + 1) );
 
 		Illuminate( hull, new Vector( 0.0f, -1.0f ) );
 
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( hull.Solar.GetReference( 0, Border - 1 ), Is.EqualTo( Flux ).Within( 1e-3f ) );
-			Assert.That( hull.Solar.GetReference( 0, Border + 1 ), Is.Zero );
+			Assert.That( hull.Solar[0, Border - 1], Is.EqualTo( Flux ).Within( 1e-3f ) );
+			Assert.That( hull.Solar[0, Border + 1], Is.Zero );
 		}
 	}
 
 	[Test]
 	public void Illuminate_NoSun_NothingIsLit() {
-		Hull hull = new Hull( (0, 0) );
-		hull.Solar.GetReference( 0, 0 ) = 5.0f;
+		using Hull hull = new Hull( (0, 0) );
+		hull.Solar[0, 0] = 5.0f;
 
 		Illuminate( hull, new Vector() );
 
-		Assert.That( hull.Solar.GetReference( 0, 0 ), Is.Zero );
+		Assert.That( hull.Solar[0, 0], Is.Zero );
 	}
 
 	private void Illuminate(
@@ -74,44 +74,39 @@ public sealed class ThermalSolarTests {
 	}
 
 	// Occupied cells, each open to vacuum on every face that does not touch another occupied cell.
-	private sealed class Hull {
+	private sealed class Hull : IDisposable {
+
+		private readonly ICompiledGridAssembly<float> _compiled;
 
 		public Hull(
 			params (int Column, int Row)[] cells
 		) {
-			Layout = new ChunkedGridLayout( AtmosphereSimd.ChunkSize );
+			int width = cells.Max( cell => cell.Column ) + 1;
+			int height = cells.Max( cell => cell.Row ) + 1;
+			DenseGridSource<float> source = new DenseGridSource<float>( width, height );
 			foreach( (int column, int row) in cells ) {
-				_ = Layout.SetPopulated( column, row );
+				_ = source.TrySetCell( column, row, 0f );
 			}
-			Absorptivity = new ChunkedGridLayer<float>( Layout );
-			Vacuum = new ChunkedGridLayer<Direction>( Layout );
-			Solar = new ChunkedGridLayer<float>( Layout );
+			_compiled = TestGridAssembly.Compile( source );
+			Absorptivity = _compiled.CreateLayer<float>();
+			Vacuum = _compiled.CreateVacuumLayer();
+			Solar = _compiled.CreateLayer<float>();
 			foreach( (int column, int row) in cells ) {
-				Absorptivity.GetReference( column, row ) = 1.0f;
-				Direction open = Direction.None;
-				if( !Layout.IsPopulated( column, row - 1 ) ) {
-					open |= Direction.North;
-				}
-				if( !Layout.IsPopulated( column + 1, row ) ) {
-					open |= Direction.East;
-				}
-				if( !Layout.IsPopulated( column, row + 1 ) ) {
-					open |= Direction.South;
-				}
-				if( !Layout.IsPopulated( column - 1, row ) ) {
-					open |= Direction.West;
-				}
-				Vacuum.GetReference( column, row ) = open;
+				Absorptivity[column, row] = 1.0f;
 			}
 		}
 
-		public ChunkedGridLayout Layout { get; }
+		public GridLayout Layout => _compiled.ChunkLayout;
 
-		public ChunkedGridLayer<float> Absorptivity { get; }
+		public IGridLayer<float> Absorptivity { get; }
 
-		public ChunkedGridLayer<Direction> Vacuum { get; }
+		public IGridLayer<Direction> Vacuum { get; }
 
-		public ChunkedGridLayer<float> Solar { get; }
+		public IGridLayer<float> Solar { get; }
+
+		public void Dispose() {
+			_compiled.Dispose();
+		}
 
 	}
 

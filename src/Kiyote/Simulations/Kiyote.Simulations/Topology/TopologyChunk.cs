@@ -1,12 +1,12 @@
 using System.Runtime.CompilerServices;
-using Kiyote.Buffers.ChunkedGrids;
+using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.Topology;
 
-// Helpers shared by the Topology kernels for working on one chunk of a ChunkedGridLayout.
+// Helpers shared by the Topology kernels for working on one chunk of a GridLayout.
 internal static class TopologyChunk {
 
-	// True when any cell of a chunk row is present. presence is ChunkedGridLayout.GetPresence( chunk ).
+	// True when any cell of a chunk row is present. presence is GridLayout.GetPresence( chunk ).
 	[MethodImpl( MethodImplOptions.AggressiveInlining )]
 	public static bool AnyInRow(
 		ReadOnlySpan<ulong> presence,
@@ -19,7 +19,7 @@ internal static class TopologyChunk {
 	}
 
 	// The presence bits of count (at most 63) cells starting at column of a chunk row, which
-	// must not straddle a 64-cell word. presence is ChunkedGridLayout.GetPresence( chunk ).
+	// must not straddle a 64-cell word. presence is GridLayout.GetPresence( chunk ).
 	[MethodImpl( MethodImplOptions.AggressiveInlining )]
 	public static ulong Bits(
 		ReadOnlySpan<ulong> presence,
@@ -33,14 +33,14 @@ internal static class TopologyChunk {
 
 	// Writes the chunk and a one-cell border from its neighbours into padded, row-major with
 	// stride ChunkSize + 2, writing default where a neighbouring chunk is not allocated.
-	// Equivalent to GridChunkNeighbourhood<T>.CopyPadded( 1, padded ), but copies each row
+	// Equivalent to IGridLayer<T>.CopyPadded( chunk, 1, padded ), but copies each row
 	// once and the border cells individually, which is considerably cheaper for a halo of 1.
 	public static void GatherPadded<T>(
-		ChunkedGridLayer<T> layer,
+		IGridLayer<T> layer,
 		int chunk,
 		Span<T> padded
 	) where T : unmanaged {
-		ChunkedGridLayout layout = layer.Layout;
+		GridLayout layout = layer.Layout;
 		int size = layout.ChunkSize;
 		int stride = size + 2;
 		ReadOnlySpan<int> neighbours = layout.GetNeighbours( chunk );
@@ -62,7 +62,7 @@ internal static class TopologyChunk {
 
 	// Fills the row above (band 0, source row size - 1) or below (band 6, source row 0) the chunk.
 	private static void GatherEdgeRow<T>(
-		ChunkedGridLayer<T> layer,
+		IGridLayer<T> layer,
 		ReadOnlySpan<int> neighbours,
 		int band,
 		int sourceRow,
@@ -84,7 +84,7 @@ internal static class TopologyChunk {
 
 	[MethodImpl( MethodImplOptions.AggressiveInlining )]
 	private static ReadOnlySpan<T> Get<T>(
-		ChunkedGridLayer<T> layer,
+		IGridLayer<T> layer,
 		int chunk
 	) where T : unmanaged {
 		return chunk < 0 ? [] : layer.GetValues( chunk );

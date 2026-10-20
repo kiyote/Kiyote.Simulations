@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
@@ -122,7 +121,7 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 		IGridLayer<bool> permeable = compiled.Bind<bool, PermeabilityBinding<TCell, TAtmosphereStrategy>>( new PermeabilityBinding<TCell, TAtmosphereStrategy>( _atmosphereStrategy ) );
 		IGridLayer<float> conductance = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _conductances ) );
 		IGridLayer<float> capacity = compiled.Bind<float, MaterialPropertyBinding<TCell, TThermalStrategy>>( new MaterialPropertyBinding<TCell, TThermalStrategy>( _thermalStrategy, _capacities ) );
-		ChunkedGridLayout layout = compiled.ChunkLayout;
+		GridLayout layout = compiled.ChunkLayout;
 
 		List<ConvectionCell> cells = [];
 		List<ConvectionLink> links = [];

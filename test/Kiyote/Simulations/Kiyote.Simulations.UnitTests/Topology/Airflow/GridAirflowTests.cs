@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.Topology.Advection;
 using Kiyote.Simulations.Topology.Pressure;
@@ -17,6 +16,7 @@ public sealed class GridAirflowTests {
 	private Mock<IGridAdvection> _advection;
 	private ISimulationClock _clock;
 	private IGridAirflow _airflow;
+	private ICompiledGridAssembly<float> _compiled;
 
 	[SetUp]
 	public void SetUp() {
@@ -25,6 +25,18 @@ public sealed class GridAirflowTests {
 		_advection = new Mock<IGridAdvection>( MockBehavior.Strict );
 		_clock = new SimulationClock();
 		_airflow = new GridAirflow( _pressure.Object, _projection.Object, _advection.Object, _clock );
+		DenseGridSource<float> source = new DenseGridSource<float>( ChunkSize, ChunkSize );
+		for( int column = 4; column <= 6; column++ ) {
+			_ = source.TrySetCell( column, 5, 0f );
+		}
+		IGridAssembly<float> assembly = new GridAssembly<float>();
+		Assert.That( assembly.TryAttach( source, 0, 0 ).Succeeded, Is.True );
+		_compiled = new GridCompiler().Compile( assembly, ChunkSize );
+	}
+
+	[TearDown]
+	public void TearDown() {
+		_compiled.Dispose();
 	}
 
 	[Test]
@@ -48,21 +60,20 @@ public sealed class GridAirflowTests {
 
 	[Test]
 	public void Update_CallsSimulationsInOrder() {
-		ChunkedGridLayout layout = new ChunkedGridLayout( ChunkSize );
-		AirflowNeighbourhood neighbourhood = Neighbourhood( Layer<Direction>( layout ) );
-		IGridLayer<float> pSrc = Layer<float>( layout );
-		IGridLayer<float> pDst = Layer<float>( layout );
-		IGridLayer<float> vx = Layer<float>( layout );
-		IGridLayer<float> vy = Layer<float>( layout );
-		IGridLayer<float> dx = Layer<float>( layout );
-		IGridLayer<float> dy = Layer<float>( layout );
-		IGridLayer<float> ix = Layer<float>( layout );
-		IGridLayer<float> iy = Layer<float>( layout );
-		IGridLayer<float> pp = Layer<float>( layout );
-		IGridLayer<float> pps = Layer<float>( layout );
-		IGridLayer<float> div = Layer<float>( layout );
-		IGridLayer<float> cSrc = Layer<float>( layout );
-		IGridLayer<float> cDst = Layer<float>( layout );
+		AirflowNeighbourhood neighbourhood = Neighbourhood( Layer<Direction>() );
+		IGridLayer<float> pSrc = Layer<float>();
+		IGridLayer<float> pDst = Layer<float>();
+		IGridLayer<float> vx = Layer<float>();
+		IGridLayer<float> vy = Layer<float>();
+		IGridLayer<float> dx = Layer<float>();
+		IGridLayer<float> dy = Layer<float>();
+		IGridLayer<float> ix = Layer<float>();
+		IGridLayer<float> iy = Layer<float>();
+		IGridLayer<float> pp = Layer<float>();
+		IGridLayer<float> pps = Layer<float>();
+		IGridLayer<float> div = Layer<float>();
+		IGridLayer<float> cSrc = Layer<float>();
+		IGridLayer<float> cDst = Layer<float>();
 		MockSequence sequence = new MockSequence();
 		_pressure.InSequence( sequence ).Setup( p => p.Update( neighbourhood.Pressure, pSrc, pDst ) );
 		_advection.InSequence( sequence ).Setup( a => a.Update( neighbourhood.Advection, vx, vy, vx, ix ) );
@@ -83,37 +94,35 @@ public sealed class GridAirflowTests {
 
 	[Test]
 	public void Update_PressurePeak_AcceleratesIntermediateVelocityAway() {
-		ChunkedGridLayout layout = new ChunkedGridLayout( ChunkSize );
-		_ = layout.SetPopulatedRun( 4, 5, 3 );
-		IGridLayer<Direction> flags = Layer<Direction>( layout );
-		_ = flags.Values.TrySet( 4, 5, Direction.East );
-		_ = flags.Values.TrySet( 5, 5, Direction.East | Direction.West );
-		_ = flags.Values.TrySet( 6, 5, Direction.West );
+		IGridLayer<Direction> flags = Layer<Direction>();
+		flags[4, 5] = Direction.East;
+		flags[5, 5] = Direction.East | Direction.West;
+		flags[6, 5] = Direction.West;
 		AirflowNeighbourhood neighbourhood = Neighbourhood( flags );
-		IGridLayer<float> pressure = Layer<float>( layout );
-		_ = pressure.Values.TrySet( 5, 5, 1000f );
-		IGridLayer<float> ix = Layer<float>( layout );
-		IGridLayer<float> iy = Layer<float>( layout );
+		IGridLayer<float> pressure = Layer<float>();
+		pressure[5, 5] = 1000f;
+		IGridLayer<float> ix = Layer<float>();
+		IGridLayer<float> iy = Layer<float>();
 		_pressure.Setup( p => p.Update( It.IsAny<IGridLayer<Direction>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>() ) );
 		_advection.Setup( a => a.Update( It.IsAny<AdvectionNeighbourhood>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>() ) );
 		_projection.Setup( p => p.Update( It.IsAny<ProjectionNeighbourhood>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>(), It.IsAny<IGridLayer<float>>() ) );
 
 		_airflow.Update(
 			neighbourhood,
-			Layer<float>( layout ), pressure,
-			Layer<float>( layout ), Layer<float>( layout ),
-			Layer<float>( layout ), Layer<float>( layout ),
+			Layer<float>(), pressure,
+			Layer<float>(), Layer<float>(),
+			Layer<float>(), Layer<float>(),
 			ix, iy,
-			Layer<float>( layout ), Layer<float>( layout ), Layer<float>( layout ),
-			Layer<float>( layout ), Layer<float>( layout )
+			Layer<float>(), Layer<float>(), Layer<float>(),
+			Layer<float>(), Layer<float>()
 		);
 
 		float expected = 1000f * _clock.FixedTimeStep * 0.05f * 0.5f;
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( ix.Values.GetReference( 6, 5 ), Is.EqualTo( expected ).Within( 1e-6f ) );
-			Assert.That( ix.Values.GetReference( 4, 5 ), Is.EqualTo( -expected ).Within( 1e-6f ) );
-			Assert.That( ix.Values.GetReference( 5, 5 ), Is.Zero );
-			Assert.That( iy.Values.GetReference( 5, 5 ), Is.Zero );
+			Assert.That( ix[6, 5], Is.EqualTo( expected ).Within( 1e-6f ) );
+			Assert.That( ix[4, 5], Is.EqualTo( -expected ).Within( 1e-6f ) );
+			Assert.That( ix[5, 5], Is.Zero );
+			Assert.That( iy[5, 5], Is.Zero );
 		}
 	}
 
@@ -127,13 +136,8 @@ public sealed class GridAirflowTests {
 		);
 	}
 
-	private static IGridLayer<T> Layer<T>(
-		ChunkedGridLayout layout
-	) where T : unmanaged {
-		Mock<IGridLayer<T>> layer = new Mock<IGridLayer<T>>();
-		layer.Setup( l => l.Layout ).Returns( layout );
-		layer.Setup( l => l.Values ).Returns( new ChunkedGridLayer<T>( layout ) );
-		return layer.Object;
+	private IGridLayer<T> Layer<T>() where T : unmanaged {
+		return _compiled.CreateLayer<T>();
 	}
 
 }

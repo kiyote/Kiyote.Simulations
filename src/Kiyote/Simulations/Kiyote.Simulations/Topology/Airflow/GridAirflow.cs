@@ -91,7 +91,7 @@ public sealed class GridAirflow : IGridAirflow {
 		IGridLayer<float> velocityX,
 		IGridLayer<float> velocityY
 	) {
-		ChunkedGridLayout layout = pressure.Layout;
+		GridLayout layout = pressure.Layout;
 		int size = layout.ChunkSize;
 		int stride = size + ( 2 * Halo );
 		float scale = _forceScale;
@@ -101,10 +101,10 @@ public sealed class GridAirflow : IGridAirflow {
 		Vector256<int> southBit = Vector256.Create( (int)Direction.South );
 		Vector256<int> northBit = Vector256.Create( (int)Direction.North );
 
-		ChunkedGridLayer<Direction> flagValues = neighbourhood.Values;
-		ChunkedGridLayer<float> pressureValues = pressure.Values;
-		ChunkedGridLayer<float> velocityXValues = velocityX.Values;
-		ChunkedGridLayer<float> velocityYValues = velocityY.Values;
+		IGridLayer<Direction> flagValues = neighbourhood;
+		IGridLayer<float> pressureValues = pressure;
+		IGridLayer<float> velocityXValues = velocityX;
+		IGridLayer<float> velocityYValues = velocityY;
 		float[] scratch = ArrayPool<float>.Shared.Rent( ChunkPadding.GetPaddedLength( size, Halo ) );
 		try {
 			foreach( int chunk in layout.EnumerateChunks() ) {

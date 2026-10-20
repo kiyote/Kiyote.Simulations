@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using static Kiyote.Simulations.LowFidelity.Atmospherics.AtmosphereSimd;
 
@@ -17,14 +16,16 @@ internal sealed class ThermalSolar : IThermalSolar {
 	];
 
 	void IThermalSolar.Illuminate(
-		ChunkedGridLayout layout,
+		GridLayout layout,
 		Vector sunDirection,
 		float flux,
-		ChunkedGridLayer<float> absorptivityLayer,
-		ChunkedGridLayer<Direction> vacuumLayer,
-		ChunkedGridLayer<float> solarLayer
+		IGridLayer<float> absorptivityLayer,
+		IGridLayer<Direction> vacuumLayer,
+		IGridLayer<float> solarLayer
 	) {
-		solarLayer.ClearValues();
+		foreach( int chunk in layout.EnumerateChunks() ) {
+			solarLayer.GetValues( chunk ).Clear();
+		}
 		float length = MathF.Sqrt( ( sunDirection.X * sunDirection.X ) + ( sunDirection.Y * sunDirection.Y ) );
 		if( length <= 0.0f
 			|| flux <= 0.0f
@@ -72,7 +73,7 @@ internal sealed class ThermalSolar : IThermalSolar {
 
 	// Marches towards the sun until the ray leaves the grid's bounds or hits an occupied cell.
 	private static bool IsLit(
-		ChunkedGridLayout layout,
+		GridLayout layout,
 		Bounds bounds,
 		float x,
 		float y,

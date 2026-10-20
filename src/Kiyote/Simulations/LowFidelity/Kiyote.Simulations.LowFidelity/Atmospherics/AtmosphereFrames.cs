@@ -77,7 +77,7 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 		IGridLayer<float>[] gas,
 		IGridLayer<float>?[] condensate
 	) {
-		ChunkedGridLayout layout = pressure.Layout;
+		GridLayout layout = pressure.Layout;
 		TripleBufferedChunkedGrid<float>?[] grids = _grids;
 		if( !Matches( grids, layout ) ) {
 			grids = Create( layout, condensate );
@@ -110,7 +110,7 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 	}
 
 	private TripleBufferedChunkedGrid<float>?[] Create(
-		ChunkedGridLayout layout,
+		GridLayout layout,
 		IGridLayer<float>?[] condensate
 	) {
 		ChunkedGrid<float> template = new ChunkedGrid<float>( layout.ChunkSize );
@@ -144,7 +144,7 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 	// Every grid in a set shares one topology, so checking the first is enough.
 	private static bool Matches(
 		TripleBufferedChunkedGrid<float>?[] grids,
-		ChunkedGridLayout layout
+		GridLayout layout
 	) {
 		if( grids.Length == 0 ) {
 			return false;
@@ -172,8 +172,8 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 		IGridLayer<float> source,
 		TripleBufferedChunkedGrid<float> target
 	) {
-		ChunkedGridLayout layout = source.Layout;
-		ChunkedGridLayer<float> values = source.Values;
+		GridLayout layout = source.Layout;
+		IGridLayer<float> values = source;
 		foreach( int chunk in layout.EnumerateChunks() ) {
 			if( target.TryGetChunk( layout.GetChunkColumn( chunk ), layout.GetChunkRow( chunk ), out BufferedChunk<float> published ) ) {
 				values.GetValues( chunk ).CopyTo( published.Current.Values );

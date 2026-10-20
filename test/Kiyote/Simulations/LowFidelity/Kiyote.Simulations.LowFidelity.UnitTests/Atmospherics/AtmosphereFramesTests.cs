@@ -1,4 +1,5 @@
 using Kiyote.Buffers.ChunkedGrids;
+using Kiyote.Geometry.Topology;
 using Moq;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics.UnitTests;
@@ -11,13 +12,14 @@ public sealed class AtmosphereFramesTests {
 	private const int Height = 4;
 
 	private Mock<IGasRegistry> _gases;
-	private ChunkedGridLayout _layout;
-	private TestGridLayer<float> _pressure;
-	private TestGridLayer<float> _temperature;
-	private TestGridLayer<float> _windX;
-	private TestGridLayer<float> _windY;
-	private TestGridLayer<float>[] _gas;
-	private TestGridLayer<float>[] _condensate;
+	private ICompiledGridAssembly<float> _compiled;
+	private PlacementId _placement;
+	private IGridLayer<float> _pressure;
+	private IGridLayer<float> _temperature;
+	private IGridLayer<float> _windX;
+	private IGridLayer<float> _windY;
+	private IGridLayer<float>[] _gas;
+	private IGridLayer<float>[] _condensate;
 	private AtmosphereFrames _publisher;
 	private IAtmosphereFrames _frames;
 
@@ -28,15 +30,27 @@ public sealed class AtmosphereFramesTests {
 		_gases
 			.Setup( g => g.GetDefinition( new GasIndex( 1 ) ) )
 			.Returns( new GasDefinition( "N2", "Nitrogen", null, null ) );
-		_layout = TestGridLayout.Create( Width, Height );
-		_pressure = new TestGridLayer<float>( _layout );
-		_temperature = new TestGridLayer<float>( _layout );
-		_windX = new TestGridLayer<float>( _layout );
-		_windY = new TestGridLayer<float>( _layout );
-		_gas = [new TestGridLayer<float>( _layout ), new TestGridLayer<float>( _layout )];
-		_condensate = [new TestGridLayer<float>( _layout ), null];
+		DenseGridSource<float> source = new DenseGridSource<float>( AtmosphereSimd.ChunkSize * 3, Height );
+		for( int row = 0; row < Height; row++ ) {
+			for( int column = 0; column < Width; column++ ) {
+				_ = source.TrySetCell( column, row, 0f );
+			}
+		}
+		_compiled = TestGridAssembly.Compile( source );
+		_placement = _compiled.Assembly.Placements[0].Id;
+		_pressure = _compiled.CreateLayer<float>();
+		_temperature = _compiled.CreateLayer<float>();
+		_windX = _compiled.CreateLayer<float>();
+		_windY = _compiled.CreateLayer<float>();
+		_gas = [_compiled.CreateLayer<float>(), _compiled.CreateLayer<float>()];
+		_condensate = [_compiled.CreateLayer<float>(), null];
 		_publisher = new AtmosphereFrames( _gases.Object );
 		_frames = _publisher;
+	}
+
+	[TearDown]
+	public void TearDown() {
+		_compiled.Dispose();
 	}
 
 	[Test]
@@ -78,8 +92,8 @@ public sealed class AtmosphereFramesTests {
 	public void Publish_CellsAdded_PublishesNewTopology() {
 		Publish( 1 );
 		const int InNewChunk = ( AtmosphereSimd.ChunkSize * 2 ) + 3;
-		_ = _layout.SetPopulated( Width, 0 );
-		_ = _layout.SetPopulated( InNewChunk, 0 );
+		Assert.That( _compiled.Assembly.TryAddCell( _placement, Width, 0, 0f ), Is.True );
+		Assert.That( _compiled.Assembly.TryAddCell( _placement, InNewChunk, 0, 0f ), Is.True );
 		_windX[Width, 0] = 4.0f;
 		_windX[InNewChunk, 0] = 5.0f;
 
@@ -95,7 +109,7 @@ public sealed class AtmosphereFramesTests {
 	[Test]
 	public void Publish_CellRemoved_IsNoLongerPublished() {
 		Publish( 1 );
-		_ = _layout.ClearPopulated( 1, 1 );
+		Assert.That( _compiled.Assembly.TryRemoveCell( _placement, 1, 1 ), Is.True );
 
 		Publish( 2 );
 
@@ -112,7 +126,7 @@ public sealed class AtmosphereFramesTests {
 		Publish( 1 );
 		TripleBufferedLease<float> held = _frames.AcquireGas( new GasIndex( 1 ) );
 
-		_ = _layout.SetPopulated( Width, 0 );
+		Assert.That( _compiled.Assembly.TryAddCell( _placement, Width, 0, 0f ), Is.True );
 		_gas[1][1, 1] = 2.0f;
 		Publish( 2 );
 
@@ -125,7 +139,7 @@ public sealed class AtmosphereFramesTests {
 
 	[Test]
 	public void AcquireCondensate_GasCondenses_ReadsPublishedValues() {
-		_condensate[0][2, 2] = 9.0f;
+		_condensate[0]![2, 2] = 9.0f;
 
 		Publish( 1 );
 

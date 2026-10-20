@@ -42,13 +42,13 @@ public sealed class GridAdvection : IGridAdvection {
 		IGridLayer<float> source,
 		IGridLayer<float> destination
 	) {
-		ChunkedGridLayer<Direction> passableValues = neighbourhood.Passable.Values;
-		ChunkedGridLayer<Direction> vacuumValues = neighbourhood.Vacuum.Values;
-		ChunkedGridLayer<float> sourceValues = source.Values;
-		ChunkedGridLayer<float> velocityXValues = velocityX.Values;
-		ChunkedGridLayer<float> velocityYValues = velocityY.Values;
-		ChunkedGridLayer<float> destinationValues = destination.Values;
-		ChunkedGridLayout layout = source.Layout;
+		IGridLayer<Direction> passableValues = neighbourhood.Passable;
+		IGridLayer<Direction> vacuumValues = neighbourhood.Vacuum;
+		IGridLayer<float> sourceValues = source;
+		IGridLayer<float> velocityXValues = velocityX;
+		IGridLayer<float> velocityYValues = velocityY;
+		IGridLayer<float> destinationValues = destination;
+		GridLayout layout = source.Layout;
 		int size = layout.ChunkSize;
 		int stride = size + ( 2 * Halo );
 		float timeStep = _timeStep;
@@ -289,10 +289,10 @@ public sealed class GridAdvection : IGridAdvection {
 	// reading as 0.
 	private readonly ref struct Walker {
 
-		private readonly ChunkedGridLayout _layout;
-		private readonly ChunkedGridLayer<Direction> _passable;
-		private readonly ChunkedGridLayer<Direction> _vacuum;
-		private readonly ChunkedGridLayer<float> _source;
+		private readonly GridLayout _layout;
+		private readonly IGridLayer<Direction> _passable;
+		private readonly IGridLayer<Direction> _vacuum;
+		private readonly IGridLayer<float> _source;
 		private readonly int _chunk;
 		private readonly ReadOnlySpan<float> _input;
 		private readonly ReadOnlySpan<Direction> _chunkPassable;
@@ -302,10 +302,10 @@ public sealed class GridAdvection : IGridAdvection {
 		private readonly float _timeStep;
 
 		public Walker(
-			ChunkedGridLayout layout,
-			ChunkedGridLayer<Direction> passable,
-			ChunkedGridLayer<Direction> vacuum,
-			ChunkedGridLayer<float> source,
+			GridLayout layout,
+			IGridLayer<Direction> passable,
+			IGridLayer<Direction> vacuum,
+			IGridLayer<float> source,
 			int chunk,
 			ReadOnlySpan<float> input,
 			ReadOnlySpan<Direction> chunkPassable,

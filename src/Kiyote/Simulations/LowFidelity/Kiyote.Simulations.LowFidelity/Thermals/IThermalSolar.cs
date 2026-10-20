@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.LowFidelity.Thermals;
@@ -9,12 +8,12 @@ internal interface IThermalSolar {
 	// A vacuum-facing face is lit when it faces the sun and the ray towards the sun leaves the grid
 	// without passing through another occupied cell. Every layer shares layout.
 	void Illuminate(
-		ChunkedGridLayout layout,
+		GridLayout layout,
 		Vector sunDirection,
 		float flux,
-		ChunkedGridLayer<float> absorptivity,
-		ChunkedGridLayer<Direction> vacuum,
-		ChunkedGridLayer<float> solar
+		IGridLayer<float> absorptivity,
+		IGridLayer<Direction> vacuum,
+		IGridLayer<float> solar
 	);
 
 }

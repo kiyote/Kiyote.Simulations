@@ -9,9 +9,9 @@ namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 //
 // Stage kernels work on one chunk at a time through two span shapes:
 //   - chunk spans hold ChunkSize * ChunkSize values, row-major, as returned by
-//     ChunkedGridLayer<T>.GetValues; cell (c, r) is at ChunkIndex( c, r ).
+//     IGridLayer<T>.GetValues; cell (c, r) is at ChunkIndex( c, r ).
 //   - padded spans hold the chunk plus a one-cell border from its neighbours, as written by
-//     GridChunkNeighbourhood<T>.CopyPadded( 1, ... ); cell (c, r) is at PaddedIndex( c, r ),
+//     IGridLayer<T>.CopyPadded( chunk, 1, ... ); cell (c, r) is at PaddedIndex( c, r ),
 //     so its west neighbour is at -1 and its north neighbour at -PaddedStride.
 // Kernels only read neighbours through padded spans.
 internal static class AtmosphereSimd {
@@ -52,14 +52,14 @@ internal static class AtmosphereSimd {
 	}
 
 	// Gathers a chunk and its one-cell border into padded scratch, writing default where a
-	// neighbouring chunk is not allocated. Equivalent to GridChunkNeighbourhood<T>.CopyPadded( 1, ... ),
+	// neighbouring chunk is not allocated. Equivalent to IGridLayer<T>.CopyPadded( chunk, 1, ... ),
 	// but copies each row once and the border cells individually, which is much cheaper for a halo of 1.
 	public static void Gather<T>(
 		IGridLayer<T> layer,
 		int chunk,
 		Span<T> padded
 	) where T : unmanaged {
-		ChunkedGridLayer<T> values = layer.Values;
+		IGridLayer<T> values = layer;
 		ReadOnlySpan<int> neighbours = layer.Layout.GetNeighbours( chunk );
 		ReadOnlySpan<T> centre = values.GetValues( chunk );
 		ReadOnlySpan<T> west = GetValues( values, neighbours[3] );
@@ -79,7 +79,7 @@ internal static class AtmosphereSimd {
 
 	// Fills the row above (band 0, source row ChunkSize - 1) or below (band 6, source row 0) the chunk.
 	private static void GatherEdgeRow<T>(
-		ChunkedGridLayer<T> values,
+		IGridLayer<T> values,
 		ReadOnlySpan<int> neighbours,
 		int band,
 		int sourceRow,
@@ -100,7 +100,7 @@ internal static class AtmosphereSimd {
 
 	[MethodImpl( MethodImplOptions.AggressiveInlining )]
 	private static ReadOnlySpan<T> GetValues<T>(
-		ChunkedGridLayer<T> values,
+		IGridLayer<T> values,
 		int chunk
 	) where T : unmanaged {
 		return chunk < 0 ? [] : values.GetValues( chunk );
@@ -154,7 +154,7 @@ internal static class AtmosphereSimd {
 
 	// True when no presence word of the chunk is set.
 	public static bool IsEmpty(
-		ChunkedGridLayout layout,
+		GridLayout layout,
 		int chunk
 	) {
 		return layout.GetFill( chunk ) == ChunkFill.Empty;

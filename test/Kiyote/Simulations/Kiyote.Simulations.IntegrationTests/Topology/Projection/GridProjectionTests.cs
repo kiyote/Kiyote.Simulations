@@ -4,17 +4,19 @@ using Kiyote.Simulations.Topology.Projection;
 
 namespace Kiyote.Simulations.Topology.Projection.IntegrationTests;
 
-[TestFixture( 32 )]
-[TestFixture( 64 )]
+[TestFixture( 32, 20 )]
+[TestFixture( 32, 21 )]
+[TestFixture( 64, 20 )]
+[TestFixture( 64, 21 )]
 [ExcludeFromCodeCoverage]
 public sealed class GridProjectionTests {
 
 	private readonly IGridProjection _projection;
 	private readonly int _chunkSize;
 
-	public GridProjectionTests( int chunkSize ) {
+	public GridProjectionTests( int chunkSize, int iterations ) {
 		_chunkSize = chunkSize;
-		_projection = new GridProjection( new Settings( 20 ) );
+		_projection = new GridProjection( new Settings( iterations ) );
 	}
 
 	[Test]

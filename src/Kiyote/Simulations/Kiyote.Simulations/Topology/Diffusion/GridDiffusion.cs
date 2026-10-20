@@ -50,11 +50,11 @@ public sealed class GridDiffusion : IGridDiffusion {
 	) {
 		IGridLayer<Direction> vacuum = compiled.CreateVacuumLayer();
 		IGridLayer<Direction> neighbourhood = compiled.CreateLayer<Direction>();
-		ChunkedGridLayout layout = compiled.ChunkLayout;
+		GridLayout layout = compiled.ChunkLayout;
 		foreach( int chunk in layout.EnumerateChunks() ) {
-			ReadOnlySpan<Direction> passable = connectivity.Values.GetValues( chunk );
-			ReadOnlySpan<Direction> missing = vacuum.Values.GetValues( chunk );
-			Span<Direction> combined = neighbourhood.Values.GetValues( chunk );
+			ReadOnlySpan<Direction> passable = connectivity.GetValues( chunk );
+			ReadOnlySpan<Direction> missing = vacuum.GetValues( chunk );
+			Span<Direction> combined = neighbourhood.GetValues( chunk );
 			for( int i = 0; i < combined.Length; i++ ) {
 				combined[i] = passable[i] | missing[i];
 			}
@@ -68,7 +68,7 @@ public sealed class GridDiffusion : IGridDiffusion {
 		IGridLayer<float> source,
 		IGridLayer<float> destination
 	) {
-		ChunkedGridLayout layout = source.Layout;
+		GridLayout layout = source.Layout;
 		int size = layout.ChunkSize;
 		int inputStride = size + ( 2 * Halo );
 		float rate = _rate;
@@ -78,9 +78,9 @@ public sealed class GridDiffusion : IGridDiffusion {
 			inputOffsets[d] = ( _deltaRows[d] * inputStride ) + _deltaColumns[d];
 		}
 
-		ChunkedGridLayer<Direction> flagValues = neighbourhood.Values;
-		ChunkedGridLayer<float> sourceValues = source.Values;
-		ChunkedGridLayer<float> destinationValues = destination.Values;
+		IGridLayer<Direction> flagValues = neighbourhood;
+		IGridLayer<float> sourceValues = source;
+		IGridLayer<float> destinationValues = destination;
 		float[] scratch = ArrayPool<float>.Shared.Rent( ChunkPadding.GetPaddedLength( size, Halo ) );
 		try {
 			foreach( int chunk in layout.EnumerateChunks() ) {
