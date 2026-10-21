@@ -24,12 +24,14 @@ internal sealed class ThermalVisualizer {
 	private readonly ThermalsSettings _settings;
 	private readonly IFileSystem _fileSystem;
 	private readonly INumericBuffer<byte> _pixels;
+	private readonly int _stepsPerFrame;
 
 	public ThermalVisualizer(
 		IAnimationWriter animationWriter,
 		IFileSystem fileSystem,
 		INumericBufferFactory bufferFactory,
 		IGridThermals thermals,
+		ISimulationClock clock,
 		IGridCompiler compiler,
 		IMaterialRegistry materials,
 		ThermalsSettings settings
@@ -41,6 +43,7 @@ internal sealed class ThermalVisualizer {
 		_compiler = compiler;
 		_materials = materials;
 		_pixels = bufferFactory.Create<byte>( AsciiGridSource.Width, AsciiGridSource.Height, 0 );
+		_stepsPerFrame = checked( (int)( SimulatedPerFrame.TotalSeconds / clock.FixedTimeStep ) );
 	}
 
 	public void Execute(
@@ -75,7 +78,10 @@ internal sealed class ThermalVisualizer {
 		string fileName = _fileSystem.Path.Combine( outputFolder, name );
 		using IAnimationBuilder builder = _animation.StartAnimation( fileName, FrameTime );
 		for( int frame = 0; frame < TotalFrameCount; frame++ ) {
-			_ = thermal.Update( SimulatedPerFrame );
+			int steps = thermal.Update( SimulatedPerFrame );
+			if( steps != _stepsPerFrame ) {
+				throw new InvalidOperationException( $"Expected {_stepsPerFrame} thermal steps per frame, but advanced {steps}." );
+			}
 
 			IGridLayer<float> temperature = thermal.Temperature;
 			for( int row = 0; row < AsciiGridSource.Height; row++ ) {

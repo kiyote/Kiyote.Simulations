@@ -14,8 +14,8 @@
 
 ## GridProjection
 
-| Method | Iterations | RetainedEmptyChunks | Mean     | Error    | StdDev   | Allocated |
-|--------|-----------:|--------------------:|---------:|---------:|---------:|----------:|
+| Method | Iterations | RetainedEmptyChunks | Mean      | Error     | StdDev    | Allocated |
+|--------|-----------:|--------------------:|----------:|----------:|----------:|----------:|
 | Update |          1 |                   0 |  95.77 us |  3.266 us |  2.895 us |       1 B |
 | Update |          1 |                 128 | 104.25 us |  2.140 us |  2.002 us |       1 B |
 | Update |         20 |                   0 | 529.92 us | 19.516 us | 18.256 us |       6 B |
@@ -64,8 +64,8 @@
 
 ## ConvectionTopologyBenchmarks
 
-| Method          | Sparse | Mean      | Error     | StdDev    | Allocated |
-|-----------------|--------|----------:|----------:|----------:|----------:|
+| Method          | Sparse | Mean      | Error    | StdDev   | Allocated |
+|-----------------|--------|----------:|---------:|---------:|----------:|
 | Update          | False  |  69.14 us | 0.975 us | 0.761 us |       1 B |
 | RebuildTopology | False  | 133.57 us | 4.047 us | 3.786 us |  127985 B |
 | Update          | True   | 152.68 us | 3.223 us | 2.857 us |       1 B |

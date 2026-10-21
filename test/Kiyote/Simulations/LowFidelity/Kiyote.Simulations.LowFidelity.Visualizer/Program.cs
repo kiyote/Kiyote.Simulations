@@ -1,7 +1,9 @@
+using System.IO.Abstractions;
 using Kiyote.Buffers;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Geometry.Topology;
 using Kiyote.Imaging;
+using Kiyote.Imaging.Gif;
 using Kiyote.Simulations.LowFidelity.AtmosphericThermals;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
 using Kiyote.Simulations.LowFidelity.Thermals;
@@ -25,7 +27,8 @@ internal sealed class Program {
 		collection
 			.AddRaggedBuffers()
 			.AddRaggedNumericBuffers()
-			.AddGifImaging()
+			.AddSingleton<IFileSystem, FileSystem>()
+			.AddSingleton<IAnimationWriter, GifAnimationWriter>()
 			.AddSingleton( ( (IGasRegistryBuilder)new GasRegistryBuilder( [new GasDefinitionSource()] ) ).Build() )
 			.AddSingleton<IAtmosphericsSettings, AtmosphericsSettings>()
 			.AddSingleton<IGridCompiler, GridCompiler>()
@@ -35,11 +38,10 @@ internal sealed class Program {
 			.AddSingleton<ThermalsSettings>()
 			.AddSingleton<IThermalsSettings>( sp => sp.GetRequiredService<ThermalsSettings>() )
 			.AddSingleton<AtmosphereVisualizer>()
-			.AddSingleton<ThermalVisualizer>()
 			.AddSingleton<IAtmosphericThermalsSettings, AtmosphericThermalsSettings>()
 			.AddSingleton<CombinedVisualizer>();
 
-		IServiceProvider services = collection.BuildServiceProvider();
+		using ServiceProvider services = collection.BuildServiceProvider();
 
 		Console.Write( "Atmosphere..." );
 		AtmosphereVisualizer atmosphereVisualizer = services.GetRequiredService<AtmosphereVisualizer>();
@@ -47,7 +49,17 @@ internal sealed class Program {
 		Console.WriteLine( "...Done" );
 
 		Console.Write( "Thermal..." );
-		ThermalVisualizer thermalVisualizer = services.GetRequiredService<ThermalVisualizer>();
+		using ServiceProvider thermalServices = new ServiceCollection()
+			.AddSingleton( services.GetRequiredService<IMaterialRegistry>() )
+			.AddSingleton<IThermalsSettings>( services.GetRequiredService<ThermalsSettings>() )
+			.AddSingleton<ISimulationClock, ThermalVisualizerClock>()
+			.AddThermals()
+			.BuildServiceProvider();
+		ThermalVisualizer thermalVisualizer = ActivatorUtilities.CreateInstance<ThermalVisualizer>(
+			services,
+			thermalServices.GetRequiredService<IGridThermals>(),
+			thermalServices.GetRequiredService<ISimulationClock>()
+		);
 		thermalVisualizer.Execute( outputFolder );
 		Console.WriteLine( "...Done" );
 

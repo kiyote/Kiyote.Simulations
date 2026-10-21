@@ -708,3 +708,115 @@ specific target generation, reacquire source/target views after swaps, and retai
 full-copy retry/lease tests. An automatic occupancy revision, shared index
 assumption or dirty-only rotating-slot optimization would be a different design
 requiring its own correctness coverage and matched consumer measurements.
+
+## Standalone thermal visualizer timestep
+
+**Outcome:** retain a 10-second clock for the standalone thermal visualizer only.
+No production solver, material definition, default simulation clock, atmosphere
+clock or coupled stepping configuration changes.
+
+**Baseline:** the solver at `4aeb9d3`, with the standalone visualizer using the
+default 0.1-second clock. Three thermal scenarios (solar-only, radiation-only and
+solar plus radiation) each generate 100 frames. Every frame advances one simulated
+hour, for 100 simulated hours per scenario: 36,000 steps per frame and 10.8 million
+solver steps across the three animations. Changing GIF playback delay cannot
+reduce this work; lowering the maximum step count would discard simulated time.
+
+**Candidate:** an isolated thermal service provider in the LowFidelity visualizer
+[entry point](test/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity.Visualizer/Program.cs)
+uses
+[ThermalVisualizerClock](test/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity.Visualizer/Thermals/ThermalVisualizerClock.cs)
+with a 10-second step. It shares the existing material registry and thermal
+settings, but its thermal factory captures this separate clock. The standalone
+[ThermalVisualizer](test/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity.Visualizer/Thermals/ThermalVisualizer.cs)
+checks that every one-hour update actually advances 360 steps. Atmosphere and
+combined simulations continue to resolve the original provider's 0.1-second clock.
+The animation length, simulated duration, initial temperatures, map, sunlight,
+materials and fixed palette ranges remain unchanged.
+
+### Measurements and numerical checks
+
+Sequential local Release runs used the same host/runtime/dependencies documented
+above, without concurrent builds or other simulation comparisons. These are
+single stopwatch runs of complete simulation scenarios with temperature/pixel
+capture, not BenchmarkDotNet estimates or repeatability guarantees. Each run
+recreated the three scenarios from the unchanged visualizer map and support types:
+50x20 cells, 499 occupied aluminium cells, 32x32 compiled chunks, initial 294.15 K,
+conductivity 2.05 W/K, capacity 24200 J/K, emissivity 0.1, absorptivity 0.15,
+solar flux 1361 W/m2, space temperature 2.7 K, north-east sunlight except in the
+radiation-only scenario, and radiation disabled for solar-only.
+
+Every update verified its actual step count. Every occupied cell's temperature and
+palette byte was captured after every frame, and all temperatures were checked
+finite and nonnegative. The three scenarios use the existing fixed palette
+minimum/maximum pairs: solar 294.15/600 K, radiation 150/294.15 K, combined
+150/400 K. Missing cells remain black.
+
+| Step | Steps across all three scenarios | Elapsed seconds | Purpose |
+|-----:|---------------------------------:|----------------:|---------|
+| 0.1 s | 10,800,000 | 137.759 | Previous visualizer |
+| 1 s | 1,080,000 | 14.299 | Intermediate precision comparison |
+| 5 s | 216,000 | 3.300 | Nearby timestep comparison |
+| 10 s | 108,000 | 1.869 | Retained visualizer |
+| 60 s | 18,000 | 0.701 | Coarser-step comparison; not adopted |
+
+The 10-second run reduced measured scenario time by approximately 73.7x, while
+reducing actual steps by exactly 100x. A subsequent run of the actual visualizer
+executable, including GIF encoding and all atmosphere/coupled scenarios, produced
+all six animations in 5.383 seconds, excluding build time.
+
+The first comparison against 0.1 seconds was **not** visually identical:
+
+| Scenario | Maximum temperature difference, 0.1 s vs 10 s | Mean absolute difference over occupied cells/frames | Maximum grayscale difference |
+|----------|--------------------------------------------:|--------------------------------------------------:|-----------------------------:|
+| Solar | 22.220 K | 4.258 K | 19 |
+| Radiation | 7.563 K | 2.367 K | 14 |
+| Combined | 16.595 K | 4.996 K | 17 |
+
+This prompted additional checks rather than accepting speed alone. Moving from
+0.1 to just 1 second already produced nearly the same discrepancy (maximum
+21.523/7.271/16.240 K respectively). In contrast, 5- versus 10-second results
+differed by at most 0.314/0.073/0.070 K and one palette level. This indicated
+roundoff accumulation/stagnation in very small single-precision updates, not just
+larger-step truncation error.
+
+A separate scalar double-precision implementation cross-checked the same
+four-cardinal-neighbour conduction and conduction-then-radiation update at a
+one-second step. It used the same occupied-cell adjacency, public vacuum flags
+for exposed face counts, capacity/conductivity/emissivity/space constants, and
+solar powers recovered through the public thermal simulation from a zero-
+temperature, radiation-disabled ten-second first step. That initial uniform field
+has no conduction gradient, so its temperature rise isolates absorbed solar
+power; recovery still contains the source float rounding and is not an exact
+analytic solar calculation. The reference used double accumulation over all
+100 simulated hours and converted only captured temperatures back to float.
+No conduction limiter activates at these tested steps for this material.
+
+| Scenario | 0.1 s maximum error vs double reference | 10 s maximum error vs double reference | 10 s mean absolute error | 10 s maximum grayscale difference |
+|----------|---------------------------------------:|--------------------------------------:|-------------------------:|----------------------------------:|
+| Solar | 22.223 K | 0.292 K | 0.0368 K | 1 |
+| Radiation | 7.577 K | 0.051 K | 0.0100 K | 1 |
+| Combined | 16.623 K | 0.055 K | 0.0092 K | 1 |
+
+These checks support accepting the changed pixels rather than trying to preserve
+the previous reference's numerical drift. They do not constitute an analytic
+solution or a general timestep-stability guarantee.
+
+### Validation and scope
+
+- The actual executable generated all six 50x20, 100-frame GIFs successfully.
+  Every frame decoded, and every pixel of the three thermal GIFs exactly matched
+  the captured 10-second comparison output.
+- Debug and Release solution builds completed with zero warnings/errors. Every
+  standalone thermal frame passed its full-simulated-duration step-count check.
+  The comparison code/binary data were temporary verification tools, not a new
+  runtime dependency, benchmark suite or production double-precision solver.
+- The 60-second trial also remained close to the double reference (maximum
+  solar/radiation/combined errors 0.078/0.042/0.112 K, at most one palette level).
+  It was not adopted: 10 seconds already removes the minutes-long run while
+  retaining a smaller step for nonlinear radiation and split integration.
+- No claim is made that ten seconds is appropriate for atmosphere, convection,
+  other materials, lower capacities, higher conductivities or different
+  temperatures. Revalidate stability, limiters, temperature fields and palettes
+  if those visualizer inputs change. Do not globally enlarge the shared clock or
+  reduce the simulated duration to reproduce this speedup.

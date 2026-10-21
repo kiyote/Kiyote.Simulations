@@ -1,6 +1,8 @@
+using System.IO.Abstractions;
 using Kiyote.Buffers;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Imaging;
+using Kiyote.Imaging.Gif;
 using Kiyote.Simulations.Visualizer.Topology.Advection;
 using Kiyote.Simulations.Visualizer.Topology.Airflow;
 using Kiyote.Simulations.Visualizer.Topology.Diffusion;
@@ -22,7 +24,8 @@ internal sealed class Program {
 			.AddRaggedBuffers()
 			.AddRaggedNumericBuffers()
 			.AddSimulations()
-			.AddGifImaging()
+			.AddSingleton<IFileSystem, FileSystem>()
+			.AddSingleton<IAnimationWriter, GifAnimationWriter>()
 			.AddSingleton<GridDiffusionVisualizer>()
 			.AddSingleton<GridPressureVisualizer>()
 			.AddSingleton<GridProjectionVisualizer>()

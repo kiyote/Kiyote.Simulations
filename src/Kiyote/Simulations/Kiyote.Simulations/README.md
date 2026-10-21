@@ -38,4 +38,5 @@ an update and owns the compilation and all layers.
 
 The swap removes an allocated-chunk copy on odd solves. It is especially useful
 with retained empty chunks and few iterations, not a general dense/high-iteration
-solver speedup. See the matched measurements in the repository correctness plan.
+solver speedup. See the matched measurements in the
+[experiment record](../../../../EXPERIMENT.md#owner-mediated-odd-projection-swap).
