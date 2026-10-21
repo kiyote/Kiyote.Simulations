@@ -4,68 +4,69 @@
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
-| Update | 25.47 us | 0.523 us | 0.464 us |         - |
+| Update | 24.62 us | 0.680 us | 0.636 us |         - |
 
 ## GridPressure
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
-| Update | 26.23 us | 0.965 us | 0.902 us |         - |
+| Update | 25.00 us | 0.434 us | 0.406 us |         - |
 
 ## GridProjection
 
 | Method | Iterations | RetainedEmptyChunks | Mean     | Error    | StdDev   | Allocated |
 |--------|-----------:|--------------------:|---------:|---------:|---------:|----------:|
-| Update |          1 |                   0 |  99.36 us |  3.057 us |  2.710 us |       1 B |
-| Update |          1 |                 128 | 106.06 us |  2.338 us |  2.187 us |       1 B |
-| Update |         20 |                   0 | 538.38 us | 13.808 us | 11.530 us |       6 B |
-| Update |         20 |                 128 | 578.04 us | 14.653 us | 12.989 us |       6 B |
-| Update |         21 |                   0 | 552.50 us | 16.424 us | 14.559 us |       5 B |
-| Update |         21 |                 128 | 616.69 us | 18.641 us | 17.437 us |       5 B |
+| Update |          1 |                   0 |  95.77 us |  3.266 us |  2.895 us |       1 B |
+| Update |          1 |                 128 | 104.25 us |  2.140 us |  2.002 us |       1 B |
+| Update |         20 |                   0 | 529.92 us | 19.516 us | 18.256 us |       6 B |
+| Update |         20 |                 128 | 545.12 us | 10.652 us |  8.317 us |       6 B |
+| Update |         21 |                   0 | 532.60 us | 10.769 us | 10.073 us |       6 B |
+| Update |         21 |                 128 | 600.13 us | 22.472 us | 21.020 us |       6 B |
 
 ## GridAdvection
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
-| Update | 52.27 us | 1.603 us | 1.421 us |         - |
+| Update | 50.29 us | 1.250 us | 1.169 us |         - |
 
 ## GridAirflow
 
 | Method | Iterations | RetainedEmptyChunks | Mean     | Error    | StdDev   | Allocated |
 |--------|-----------:|--------------------:|---------:|---------:|---------:|----------:|
-| Update |          1 |                   0 | 320.9 us |  8.68 us |  8.12 us |       3 B |
-| Update |          1 |                 128 | 343.4 us | 10.10 us |  9.44 us |       3 B |
-| Update |         20 |                   0 | 756.5 us | 28.67 us | 26.82 us |       6 B |
-| Update |         20 |                 128 | 805.6 us | 20.38 us | 17.02 us |       6 B |
-| Update |         21 |                   0 | 808.6 us | 41.22 us | 38.56 us |       6 B |
-| Update |         21 |                 128 | 839.4 us | 38.78 us | 36.28 us |       6 B |
+| Update |          1 |                   0 | 313.9 us |  7.48 us |  6.63 us |       3 B |
+| Update |          1 |                 128 | 330.7 us |  8.37 us |  7.42 us |       3 B |
+| Update |         20 |                   0 | 760.9 us | 23.07 us | 21.58 us |       6 B |
+| Update |         20 |                 128 | 772.5 us | 11.29 us |  9.43 us |       6 B |
+| Update |         21 |                   0 | 775.6 us | 33.66 us | 28.11 us |       6 B |
+| Update |         21 |                 128 | 843.5 us | 31.86 us | 29.81 us |       6 B |
 
 ## Atmosphere
 
 | Method            | Mean      | Error    | StdDev   | Allocated |
 |-------------------|----------:|---------:|---------:|----------:|
-| Update            | 268.54 us | 7.109 us | 5.936 us |         - |
-| ReadPressureFrame |  16.02 us | 0.388 us | 0.363 us |         - |
+| PublishInputs     |  25.81 us | 0.753 us | 0.704 us |         - |
+| Update            | 280.96 us | 8.031 us | 7.513 us |       2 B |
+| ReadPressureFrame |  16.65 us | 0.295 us | 0.276 us |         - |
 
 ## Thermal
 
 | Method              | Mean     | Error   | StdDev  | Allocated |
 |---------------------|---------:|--------:|--------:|----------:|
-| Update              | 201.5 us | 7.61 us | 7.12 us |       1 B |
-| UpdateWithMovingSun | 238.8 us | 6.54 us | 6.11 us |       1 B |
+| Update              | 213.2 us | 7.12 us | 6.31 us |       1 B |
+| UpdateWithMovingSun | 253.3 us | 4.18 us | 3.91 us |       3 B |
 
 ## AtmosphericThermals
 
 | Method | TicksPerUpdate | Mean       | Error     | StdDev    | Allocated |
 |--------|---------------:|-----------:|----------:|----------:|----------:|
-| Update |              1 |   810.9 us |  44.08 us |  41.23 us |       6 B |
-| Update |              8 | 6,201.4 us | 259.29 us | 216.52 us |      47 B |
+| Update |              1 |   883.1 us |  24.19 us |  21.44 us |       6 B |
+| Update |              8 | 6,437.6 us | 251.83 us | 235.56 us |      45 B |
 
 ## ConvectionTopologyBenchmarks
 
 | Method          | Sparse | Mean      | Error     | StdDev    | Allocated |
 |-----------------|--------|----------:|----------:|----------:|----------:|
-| Update          | False  |  68.47 us |  1.492 us |  1.323 us |       1 B |
-| RebuildTopology | False  | 129.86 us |  1.655 us |  1.548 us |  127985 B |
-| Update          | True   | 153.52 us |  7.095 us |  6.290 us |       1 B |
-| RebuildTopology | True   | 834.41 us | 25.802 us | 24.136 us |  217870 B |
+| Update          | False  |  69.14 us | 0.975 us | 0.761 us |       1 B |
+| RebuildTopology | False  | 133.57 us | 4.047 us | 3.786 us |  127985 B |
+| Update          | True   | 152.68 us | 3.223 us | 2.857 us |       1 B |
+| RebuildTopology | True   | 888.53 us | 5.252 us | 4.913 us |  217870 B |

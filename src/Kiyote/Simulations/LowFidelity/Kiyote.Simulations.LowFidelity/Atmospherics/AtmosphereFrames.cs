@@ -18,6 +18,8 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 	private readonly IGasRegistry _gases;
 	private readonly int _gasCount;
 	private TripleBufferedChunkedGrid<float>?[] _grids;
+	private int[][] _sourceChunks = [];
+	private bool _validateTopology = true;
 	private long _stepCount;
 	private float _vented;
 
@@ -65,6 +67,10 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 			?? throw new ArgumentException( $"Gas '{_gases.GetDefinition( gas ).Id}' does not condense.", nameof( gas ) );
 	}
 
+	public void InvalidateTopology() {
+		_validateTopology = true;
+	}
+
 	// Called only by the simulation thread. Copies every layer into the buffer the reader cannot
 	// see, then publishes it.
 	public void Publish(
@@ -79,26 +85,32 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 	) {
 		GridLayout layout = pressure.Layout;
 		TripleBufferedChunkedGrid<float>?[] grids = _grids;
-		if( !Matches( grids, layout ) ) {
+		int[][] sourceChunks = _sourceChunks;
+		if( _validateTopology && !Matches( grids, layout ) ) {
 			grids = Create( layout, condensate );
+			sourceChunks = CreateMappings( grids, layout );
 		}
 
-		Copy( pressure, grids[PressureIndex]! );
-		Copy( temperature, grids[TemperatureIndex]! );
-		Copy( windX, grids[WindXIndex]! );
-		Copy( windY, grids[WindYIndex]! );
+		Copy( pressure, grids[PressureIndex]!, sourceChunks[PressureIndex] );
+		Copy( temperature, grids[TemperatureIndex]!, sourceChunks[TemperatureIndex] );
+		Copy( windX, grids[WindXIndex]!, sourceChunks[WindXIndex] );
+		Copy( windY, grids[WindYIndex]!, sourceChunks[WindYIndex] );
 		for( int g = 0; g < _gasCount; g++ ) {
-			Copy( gas[g], grids[FirstGasIndex + g]! );
+			int gasIndex = FirstGasIndex + g;
+			Copy( gas[g], grids[gasIndex]!, sourceChunks[gasIndex] );
 			IGridLayer<float>? layer = condensate[g];
 			if( layer is not null ) {
-				Copy( layer, grids[FirstGasIndex + _gasCount + g]! );
+				int condensateIndex = FirstGasIndex + _gasCount + g;
+				Copy( layer, grids[condensateIndex]!, sourceChunks[condensateIndex] );
 			}
 		}
 		foreach( TripleBufferedChunkedGrid<float>? grid in grids ) {
 			grid?.Swap();
 		}
 
+		_sourceChunks = sourceChunks;
 		Volatile.Write( ref _grids, grids );
+		_validateTopology = false;
 		Volatile.Write( ref _stepCount, stepCount );
 		Volatile.Write( ref _vented, vented );
 	}
@@ -170,15 +182,37 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 
 	private static void Copy(
 		IGridLayer<float> source,
-		TripleBufferedChunkedGrid<float> target
+		TripleBufferedChunkedGrid<float> target,
+		ReadOnlySpan<int> sourceChunks
 	) {
-		GridLayout layout = source.Layout;
-		IGridLayer<float> values = source;
-		foreach( int chunk in layout.EnumerateChunks() ) {
-			if( target.TryGetChunk( layout.GetChunkColumn( chunk ), layout.GetChunkRow( chunk ), out BufferedChunk<float> published ) ) {
-				values.GetValues( chunk ).CopyTo( published.Current.Values );
-			}
+		int index = 0;
+		foreach( BufferedChunk<float> published in target.EnumerateChunks() ) {
+			source.GetValues( sourceChunks[index++] ).CopyTo( published.Current.Values );
 		}
+	}
+
+	private static int[][] CreateMappings(
+		TripleBufferedChunkedGrid<float>?[] grids,
+		GridLayout layout
+	) {
+		int[][] mappings = new int[grids.Length][];
+		for( int i = 0; i < grids.Length; i++ ) {
+			TripleBufferedChunkedGrid<float>? grid = grids[i];
+			if( grid is null ) {
+				mappings[i] = [];
+				continue;
+			}
+			int[] chunks = new int[grid.ChunkCount];
+			int index = 0;
+			foreach( BufferedChunk<float> target in grid.EnumerateChunks() ) {
+				if( !layout.TryGetChunk( target.Current.ChunkColumn, target.Current.ChunkRow, out int chunk ) ) {
+					throw new InvalidOperationException( "Published chunk has no corresponding source chunk." );
+				}
+				chunks[index++] = chunk;
+			}
+			mappings[i] = chunks;
+		}
+		return mappings;
 	}
 
 }

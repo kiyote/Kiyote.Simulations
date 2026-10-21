@@ -52,14 +52,25 @@ public class AtmosphereBenchmarks {
 	public void WarmupAndValidateAllocations() {
 		for( int i = 0; i < 100; i++ ) {
 			Update();
+			PublishInputs();
 		}
 		long before = GC.GetAllocatedBytesForCurrentThread();
 		for( int i = 0; i < 100; i++ ) {
 			Update();
+			PublishInputs();
 		}
 		long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 		if( allocated != 0 ) {
 			throw new InvalidOperationException( $"Warmed atmosphere updates allocated {allocated} managed bytes." );
+		}
+	}
+
+	[Benchmark]
+	public void PublishInputs() {
+		_atmosphere.AddGas( 50, 50, _gas, 1f );
+		long previous = _atmosphere.Frames.StepCount;
+		if( _atmosphere.Update( TimeSpan.Zero ) != 0 || _atmosphere.Frames.StepCount != previous ) {
+			throw new InvalidOperationException( "The publication benchmark unexpectedly advanced physics." );
 		}
 	}
 

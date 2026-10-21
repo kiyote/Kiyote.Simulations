@@ -113,6 +113,12 @@ If an edit needs current source-cell values, commit before making that edit.
 - The same explicit invalidation contract applies to frame topology. Do not rely
   on automatic discovery of edits or use layout version to decide whether to
   invalidate. Previously acquired leases remain unchanged.
+- Frame publication caches integer source-chunk mappings and validates occupancy
+  only on initialization and after nonempty/full invalidation. Property-only edits
+  reuse matching grids. A replacement grid set and its mappings are installed only
+  after all quantities copy successfully; failed publication preserves the previous
+  frames/counters and retries pending validation. Every publication still copies
+  every quantity in full, reacquiring current buffer views after swaps.
 
 ### Structural edits
 

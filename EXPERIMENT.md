@@ -7,8 +7,9 @@ It does not require a separate implementation plan or locally retained logs.
 
 The measurements below are historical snapshots, not promises for every runtime,
 machine or topology. [BENCHMARK.md](BENCHMARK.md) holds the latest result tables.
-As of 2026-10-21, that file was refreshed from baseline run A2 of the public
-halo-gathering experiment, covering all 25 retained consumer cases.
+The latest tables use retained candidate run B2 of the publication-topology cache
+experiment for all 11 LowFidelity cases, plus a subsequent retained-runtime rerun
+of all 15 core cases: 26 consumer cases in total.
 
 ## Decisions at a glance
 
@@ -22,6 +23,9 @@ halo-gathering experiment, covering all 25 retained consumer cases.
 - [Public halo gathering](#public-halo-gathering) was rejected: replacing the
   specialized halo-one helpers with the public copy API caused large, repeatable
   consumer regressions despite equivalent contents and zero warmed allocations.
+- [Invalidation-driven publication topology cache](#invalidation-driven-publication-topology-cache)
+  was retained: publication-heavy zero-step atmosphere updates took 13.7% less
+  time, without a confirmed greater-than-10% regression or new warmed allocations.
 
 ## Measurement conventions
 
@@ -47,7 +51,7 @@ halo-gathering experiment, covering all 25 retained consumer cases.
   runs during timing.
 - Dependency context: Kiyote.Geometry 0.35.0, Kiyote.Buffers 0.15.0 and
   Kiyote.Buffers.Numerics 0.15.0, targeting .NET 10. No dependency changes were
-  needed for the four optional experiments recorded here.
+  needed for the five optional experiments recorded here.
 
 ## Reproduction and evidence
 
@@ -563,3 +567,144 @@ must again compare complete padded contents, corners, holes and missing-neighbou
 zeroes, preserve scratch suffixes and zero warmed allocations, and pass matched
 whole-consumer measurements. Publishing an upstream helper alone is not evidence
 that adopting it is faster.
+
+## Invalidation-driven publication topology cache
+
+**Outcome:** retained. The implementation, coverage and benchmark harness are in
+the commit introducing this section, titled
+`Cache atmosphere publication topology after explicit invalidation`.
+
+**Baseline:** production source at `c66ed60`, with the new `PublishInputs`
+benchmark and strengthened atmosphere allocation setup used unchanged for both
+versions. Before every publication, the publisher compared all source chunk
+presence against the pressure frame, then resolved world chunk coordinates into
+each quantity's current target buffer during every full copy.
+
+**Candidate:** in
+[AtmosphereFrames.cs](src/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity/Atmospherics/AtmosphereFrames.cs),
+validate topology at initial publication and after explicit invalidation, rather
+than on every unchanged publication. Cache a separate integer source-chunk mapping
+for each quantity's fixed-topology target enumeration. Both nonempty area and
+full invalidation in
+[Atmosphere.cs](src/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity/Atmospherics/Atmosphere.cs)
+signal the publisher; empty areas remain no-ops.
+
+- Mappings use public APIs only. Building them enumerates each target grid and
+  resolves its coordinates to stable compiled source chunk IDs. Full copies then
+  enumerate fresh target current-buffer views and reacquire source spans by ID.
+  No writable span, buffered chunk snapshot, assumed cross-grid chunk index,
+  internal storage access or upstream API change is retained.
+- A topology mismatch creates replacement grids and mappings locally. All quantity
+  copies finish before any swap or installation. Only successful publication
+  installs writer-only mappings and the matching reader-visible grid generation,
+  updates counters and clears pending validation. Copy failures propagate; old
+  frames/counters remain published, and retry needs no second invalidation.
+  Matching occupancy after property-only invalidation reuses existing grids and
+  mappings. Retained empty source chunks do not create empty published chunks.
+- The explicit live-edit contract is authoritative: same-chunk additions/removals,
+  last-cell removals and new chunks must all be reported through invalidation.
+  A layout version is not an occupancy revision. Every quantity is still copied
+  in full on every publication, including zero-step updates. Triple-buffer lease
+  rotation is unchanged, and topology replacement never mutates an old leased
+  grid. Independent quantities still do not form an atomic multi-lease snapshot.
+  Partial/dirty-only publication remains deliberately unimplemented: rotating
+  slots contain different histories and would need per-slot generation tracking.
+
+### Workloads and matched measurements
+
+The primary workload was selected before timing: the existing fully open 100x100
+atmosphere, continuously receiving gas at (50,50), updated with `TimeSpan.Zero`.
+Each `PublishInputs` call verifies that no physics tick or frame step-count advance
+occurs; it still applies a real input, finalizes derived quantities and copies all
+eight published quantities over sixteen 32x32 chunks. This is a complete supported
+consumer update, not an isolated copy benchmark or empty-world case.
+The normal one-tick atmosphere update, dense coupled one/eight ticks, dense/sparse
+four-room updates and topology rebuilds supplied consumer comparisons; thermal and
+frame-reading methods supplied controls.
+
+Four sequential Release runs used A1 -> B1 -> B2 -> A2, identical harness,
+dependencies and MediumRun/InProcessNoEmit configuration. A1/A2 used preserved
+baseline binaries; B1/B2 used the retained runtime candidate. No build, test or
+other benchmark was run concurrently. Each run executed all eleven LowFidelity
+cases successfully. The baseline runtime DLL was preserved with SHA256
+`526C5544D487151D00B0D91D906583317264C2F4F7B6CB987681B0828CDA9F9B`.
+
+| Workload (all times us) | A1 | A2 | B1 | B2 | Mean time change |
+|------------------------|---:|---:|---:|---:|-----------------:|
+| Atmosphere.PublishInputs | 30.07 | 28.94 | 25.10 | 25.81 | -13.7% |
+| Atmosphere.Update | 270.49 | 286.50 | 283.63 | 280.96 | +1.4% |
+| ReadPressureFrame control | 16.08 | 16.65 | 16.60 | 16.65 | +1.6% |
+| Thermal.Update control | 197.1 | 209.9 | 213.7 | 213.2 | +4.9% |
+| Thermal.UpdateWithMovingSun control | 227.6 | 255.7 | 248.0 | 253.3 | +3.7% |
+| Coupled 100x100, one tick | 793.3 | 892.4 | 875.6 | 883.1 | +4.3% |
+| Coupled 100x100, eight ticks | 6183.1 | 6261.7 | 6244.0 | 6437.6 | +1.9% |
+| Four dense rooms, update | 71.77 | 70.69 | 71.96 | 69.14 | -1.0% |
+| Four dense rooms, rebuild | 127.15 | 124.94 | 126.31 | 133.57 | +3.1% |
+| Four sparse rooms, update | 148.28 | 152.62 | 149.25 | 152.68 | +0.3% |
+| Four sparse rooms, rebuild | 914.82 | 856.79 | 858.22 | 888.53 | -1.4% |
+
+The primary workload improved by 16.5% for A1/B1 and 10.8% for A2/B2. Both
+candidate means also beat the faster baseline by more than 10%. Its reported
+BenchmarkDotNet mean/error pairs were A1 30.07/2.543 us, A2 28.94/0.441 us,
+B1 25.10/0.929 us and B2 25.81/0.753 us; candidate and baseline error intervals
+did not overlap. The arithmetic mean of the two candidate run means was 13.7%
+lower than the baseline pair.
+
+This is not a demonstrated full-physics speedup. Normal atmosphere updates
+averaged 1.4% more time, one/eight-tick coupled updates 4.3%/1.9% more, and the
+unchanged thermal control 4.9% more. Baseline one-tick coupled means themselves
+drifted from 793.3 to 892.4 us, so the initial candidate-versus-A1 difference is
+not a reproducible greater-than-10% regression. No other workload confirmed such
+a regression across the matched runs. These observed costs and host drift are
+reported, not subtracted or hidden behind the primary win.
+
+### Correctness, allocations and final reporting
+
+- Ten additional unit cases bring the retained full solution to 555 passing tests
+  in both Debug and Release, with zero build warnings/errors. Direct publisher
+  coverage includes every quantity across repeated buffer rotations, source-layer
+  storage swaps, noncontiguous source chunk mappings, retained empty chunks,
+  removal of the final cell, empty frames and later regrowth. A reader task holds
+  an old lease across repeated publications with and without topology replacement.
+- Injected mid-copy failures cover unchanged frames, matching-topology invalidation
+  and staged topology replacement. They verify old values/topology/counters remain
+  published and retry installs correct frames without another invalidation. The
+  existing live-edit integration suite additionally covers same-chunk changes,
+  holes, new chunks, all-quantity publication, empty/full/area invalidation,
+  metadata failure/retry, zero-step finalization and allocations after growth.
+- Exact warmed tests require zero current-thread managed bytes across 100
+  publications with unchanged topology, both with and without property-only
+  invalidation. Atmosphere benchmark setup warms 100 real-tick and 100 zero-step
+  input updates, then requires exactly zero bytes over another 100 of each. All
+  four runs passed, as did existing consumer allocation gates. New integer arrays
+  are allocated only for initial/replacement frame topology, not unchanged or
+  matching-topology invalidations; they are persistent metadata, not temporary
+  pooled buffers.
+- Focused publisher scan checklist: zero hits for literal IndexOf/StartsWith/
+  EndsWith/Contains comparisons, Substring, cultureless ToLower/ToUpper, chained
+  Replace, params, LINQ character predicates/deferred enumeration, sync-over-async,
+  ValueTask, stackalloc, string.Format, regex construction, ContainsKey,
+  JSON/options construction, HttpClient construction, ToCharArray, string +=,
+  ToString, encoding GetBytes and Trim/Split. All 1/1 publisher classes are sealed;
+  there are zero unsealed classes. Three explicit array-creation sites are confined
+  to grid/mapping creation; no compound string-allocation chain was found.
+  No actionable critical, moderate or informational anti-pattern was identified
+  in this focused scan; it is not a whole-library audit or substitute for the
+  measured allocation/consumer gates.
+- After retention, all fifteen core benchmark cases were rerun on the final
+  runtime. They are reporting refreshes, not another isolated publisher A/B
+  comparison; core implementations did not change. [BENCHMARK.md](BENCHMARK.md)
+  uses those core results and LowFidelity B2, retaining its title, class headings
+  and tables only. B2 in-process allocations were zero for PublishInputs/frame
+  reads, 2 B for atmosphere ticks, 1/3 B for fixed/moving-sun thermal, 6/45 B for
+  coupled one/eight ticks and 1 B for four-room updates. Metadata rebuilds allocated
+  127985/217870 B for dense/sparse rooms by design. These estimates are recorded
+  separately from the exact zero warmed checks, not silently replaced by them.
+
+**Decision and future refactoring:** retain the invalidation signal and safe
+integer mappings for the demonstrated publication-heavy workload. Do not claim
+the same gain when physics dominates the update. Keep mappings tied to their
+specific target generation, reacquire source/target views after swaps, and retain
+full-copy retry/lease tests. An automatic occupancy revision, shared index
+assumption or dirty-only rotating-slot optimization would be a different design
+requiring its own correctness coverage and matched consumer measurements.

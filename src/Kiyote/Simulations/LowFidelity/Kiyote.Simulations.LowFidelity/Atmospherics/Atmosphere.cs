@@ -197,13 +197,17 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere, IAtmosphereCon
 		Rect area
 	) {
 		ObjectDisposedException.ThrowIf( _disposed, this );
-		if( !area.IsEmpty && !_pendingFullRebuild ) {
-			_pendingAreas.Add( area );
+		if( !area.IsEmpty ) {
+			_frames.InvalidateTopology();
+			if( !_pendingFullRebuild ) {
+				_pendingAreas.Add( area );
+			}
 		}
 	}
 
 	public void InvalidateTopology() {
 		ObjectDisposedException.ThrowIf( _disposed, this );
+		_frames.InvalidateTopology();
 		_pendingFullRebuild = true;
 		_pendingAreas.Clear();
 	}

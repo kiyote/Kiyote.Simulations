@@ -3,8 +3,9 @@
 ## Status and purpose
 
 Implementation-ready plan, decisions resolved on 2026-10-20.
-Production implementation has started, one validated and committed work package at
-a time. The completed Geometry migration was validated with 208 passing tests and
+All work packages are complete, implemented or experimentally rejected one
+validated and committed package at a time. Keep this plan until separately
+authorized for removal. The completed Geometry migration was validated with 208 passing tests and
 committed as `d4a463c` before planned implementation began.
 The approved decisions below govern the work. The dependency-publication gate is
 an explicit future handoff, not an unresolved design choice.
@@ -159,11 +160,11 @@ to publish packages, push repositories, or rewrite their unrelated changes.
 | W5: odd projection swap | Retained | `2311711` | [Experiment](EXPERIMENT.md#owner-mediated-odd-projection-swap) |
 | W6: thermal dirty traversal | Rejected; coverage retained | `ca3f906` | [Experiment](EXPERIMENT.md#thermal-dirty-marking-traversal) |
 | W7: public halo gathering | Rejected; coverage retained | `26c3ddb` | [Experiment](EXPERIMENT.md#public-halo-gathering) |
-| W8: publication topology cache | Not started | - | [Scope below](#w8-cache-publication-topology-until-explicit-invalidation) |
+| W8: publication topology cache | Retained | This change | [Experiment](EXPERIMENT.md#invalidation-driven-publication-topology-cache) |
 
-Latest implementation validation: all 545 tests pass in Debug and Release, with
+Latest implementation validation: all 555 tests pass in Debug and Release, with
 zero build warnings/errors. Detailed validation and measurements are maintained
-in [EXPERIMENT.md](EXPERIMENT.md). W8 remains the next work package.
+in [EXPERIMENT.md](EXPERIMENT.md). No work packages remain.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation
 
