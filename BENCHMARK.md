@@ -1,16 +1,18 @@
-## Topology.GridDiffusion
+# Benchmark
+
+## GridDiffusion
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
 | Update | 25.47 us | 0.523 us | 0.464 us |         - |
 
-## Topology.GridPressure
+## GridPressure
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
 | Update | 26.23 us | 0.965 us | 0.902 us |         - |
 
-## Topology.GridProjection
+## GridProjection
 
 | Method | Iterations | RetainedEmptyChunks | Mean     | Error    | StdDev   | Allocated |
 |--------|-----------:|--------------------:|---------:|---------:|---------:|----------:|
@@ -21,13 +23,13 @@
 | Update |         21 |                   0 | 552.50 us | 16.424 us | 14.559 us |       5 B |
 | Update |         21 |                 128 | 616.69 us | 18.641 us | 17.437 us |       5 B |
 
-## Topology.GridAdvection
+## GridAdvection
 
 | Method | Mean     | Error    | StdDev   | Allocated |
 |--------|---------:|---------:|---------:|----------:|
 | Update | 52.27 us | 1.603 us | 1.421 us |         - |
 
-## Topology.GridAirflow
+## GridAirflow
 
 | Method | Iterations | RetainedEmptyChunks | Mean     | Error    | StdDev   | Allocated |
 |--------|-----------:|--------------------:|---------:|---------:|---------:|----------:|
@@ -38,28 +40,28 @@
 | Update |         21 |                   0 | 808.6 us | 41.22 us | 38.56 us |       6 B |
 | Update |         21 |                 128 | 839.4 us | 38.78 us | 36.28 us |       6 B |
 
-## LowFidelity.Atmosphere
+## Atmosphere
 
 | Method            | Mean      | Error    | StdDev   | Allocated |
 |-------------------|----------:|---------:|---------:|----------:|
 | Update            | 268.54 us | 7.109 us | 5.936 us |         - |
 | ReadPressureFrame |  16.02 us | 0.388 us | 0.363 us |         - |
 
-## LowFidelity.Thermal
+## Thermal
 
 | Method              | Mean     | Error   | StdDev  | Allocated |
 |---------------------|---------:|--------:|--------:|----------:|
 | Update              | 201.5 us | 7.61 us | 7.12 us |       1 B |
 | UpdateWithMovingSun | 238.8 us | 6.54 us | 6.11 us |       1 B |
 
-## LowFidelity.AtmosphericThermals
+## AtmosphericThermals
 
 | Method | TicksPerUpdate | Mean       | Error     | StdDev    | Allocated |
 |--------|---------------:|-----------:|----------:|----------:|----------:|
 | Update |              1 |   810.9 us |  44.08 us |  41.23 us |       6 B |
 | Update |              8 | 6,201.4 us | 259.29 us | 216.52 us |      47 B |
 
-## LowFidelity.ConvectionTopologyBenchmarks
+## ConvectionTopologyBenchmarks
 
 | Method          | Sparse | Mean      | Error     | StdDev    | Allocated |
 |-----------------|--------|----------:|----------:|----------:|----------:|

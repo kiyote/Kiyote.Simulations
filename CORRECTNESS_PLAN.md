@@ -139,365 +139,31 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   solvers. Other numerical changes require evidence, not compatibility pressure.
 - Preserve the existing dirty worktree. Implementation must not overwrite unrelated
   user changes or commit anything unless separately requested.
-- Keep [BENCHMARK.md](BENCHMARK.md) as class headings followed only by result tables.
+- Keep [BENCHMARK.md](BENCHMARK.md) as a document title, then class headings
+  followed only by result tables.
+- Keep experiment narratives, measurements, historical comparisons and validation
+  records in [EXPERIMENT.md](EXPERIMENT.md), not in the benchmark tables or this plan.
 
 ## Work packages
 
 ### Implementation progress
 
-- Baseline: migration, benchmark tables, and this plan committed as `d4a463c`;
-  208 tests passed, solution build had no warnings/errors.
-- W1: completed in `2994f0d`. Factories borrow the caller's compilation; persistence is
-  explicit; children expose lifecycle-free state views; owned and temporary layers
-  are cleaned up deterministically. Internal prepare/step/publication hooks are
-  available without changing coupled timing yet.
-- W1 validation: full solution build has no warnings/errors; all 248 tests pass;
-  all 40 new ownership regressions also pass in Release. Warmed unchanged-topology
-  updates allocate zero measured bytes for atmosphere, thermal, and combined
-  simulations in both configurations. Ownership tracking allocates only during
-  construction/rebuild, not steady-state stepping.
-- W2: completed in `83bbaeb`. Added 26 structural-lifecycle cases covering retained/new/detached
-  cells, empty replacements, detached layer references, transient flow/timing/
-  exchange resets, frame-provider replacement and held leases, runtime option
-  reapplication, and explicit commit/construction retries. Expanded the caller
-  lifecycle and failure-handling documentation; no runtime machinery was needed.
-- W2 validation: solution builds without warnings/errors; all 274 tests pass.
-  All 66 ownership/lifecycle regressions also pass in Release, including the
-  existing zero-allocation checks.
-- W3: completed in `04c6f31`. Explicit invalidation covers live occupancy, permeability/material
-  properties, derived-state publication, solar exposure, and convection links.
-  Empty areas do nothing; a full invalidation supersedes queued areas. Replacements
-  are staged before old metadata registrations are removed, with temporary cleanup
-  and pending-work retention on failure. Affected neighbour rings wake and publish
-  even without a physics tick; blocked pipe momentum is cancelled without clearing
-  unchanged open pipes. Ring expansion clamps at signed coordinate limits.
-- W3 validation: added 49 live-edit cases; all 323 solution tests pass and the build
-  has no warnings/errors. All 115 ownership/lifecycle/invalidation cases pass in
-  Release, including exact zero-allocation checks after successful chunk-growth
-  invalidation for all three simulation kinds. Coverage includes existing/new
-  chunks, retained empty chunks, held leases, negative/limit coordinates, diagonals,
-  placement seams, all four thermal material properties, solar occlusion, convection
-  membership/energy balance, caller-owned layers, and repeated failure retries.
-- W3 retains complete vacuum/property rebuilds and the existing publication
-  presence comparison. The explicit caller/publication invalidation contract is
-  established; caching that comparison and frame-copy addresses remains the
-  benchmark-gated W8 experiment. No upstream package change was required.
-- W9: completed. One coordinator-owned `TimeSpan`-tick accumulator advances both
-  children using the captured shared step and smaller child cap. Each tick advances
-  atmosphere, advances structure, then performs any due exchange. All preparation
-  finishes before consuming elapsed time; derived atmosphere state and frames
-  finalize once after all ticks/exchanges, including zero-step updates.
-  Standalone loops remain independent. Typed internal factory access avoids casts
-  of public state views, extra step interfaces, and child elapsed-time updates.
-- W9 validation: 42 new coupled timing cases; all 365 solution tests pass in Debug
-  and Release, with zero build warnings/errors. Cases cover exact phase order,
-  fractional batching, unequal caps, exact-cap remainder retention, excess-time
-  dropping, maximum elapsed values, cadence quantization, final-frame consistency,
-  held leases, aggregate venting, pre-step failure retry, commit persistence,
-  invalid configuration, the minimum representable step, standalone behavior,
-  and zero-allocation coupled batches.
-- W9 corrected-behavior baseline: reran all four existing LowFidelity workloads
-  and added a sealed 100x100 coupled aluminium/gas workload. Each coupled
-  invocation verifies its actual tick and exchange counts (one or eight each).
-  Source injection keeps atmosphere/structure work active; timing includes final
-  publication. The new coupled cases were also rerun for confirmation.
-  Baseline results are in `BENCHMARK.md`; core kernel results are retained because
-  those kernels did not change. No meaningful regression was established in the
-  rerun standalone workloads. There is no comparable old coupled benchmark, so
-  its measurements establish a baseline rather than a claimed speedup/regression.
-- W9 benchmark records: primary reports are under
-  `BenchmarkDotNet.Artifacts/correctness-w9-20261020-lowfidelity`; coupled confirmation
-  reports are under the same path with `-confirmation`. Same MediumRun,
-  InProcessNoEmit, 10 warmups/15 measurements and host/runtime as the migration
-  runs. Coupled confirmation means: 1.180 ms for one tick/exchange and 9.511 ms
-  for eight. The benchmark itself warms 100 invocations then requires exactly zero
-  current-thread managed bytes over another 100 on each actual 100x100 workload;
-  both gates passed. Preserve BenchmarkDotNet's separate in-process allocation
-  figures honestly: confirmation reports zero for one tick and 62 B/invocation
-  for eight (3,984 total measured bytes over 64 invocations), despite the exact
-  warmed-update gates measuring zero.
-- W4: completed and retained after the D6/D7 gates. Convection-link rebuilding
-  traverses allocated chunks and ascending local presence bits; metadata spans
-  are acquired once per current/cardinal-neighbour chunk for each source chunk.
-  Descriptors contain chunk/local addresses, with floor then N/E/S/W membership.
-  Empty chunks, holes, diagonals and permeable neighbours do not become wall
-  faces. In-place exchange deliberately follows compiled traversal, not a global
-  world-coordinate sort or an attachment-order-independent result.
-- W4 exchange uses narrow internal chunk-addressed state interfaces. Public and
-  internal energy inputs share application cores, including floors, actual gas
-  energy applied, capacity guards and dirty/wake/publication bookkeeping. Current
-  gas layers are summed once per gas cell after transport/condensation; exchange
-  changes no mass, so that capacity can be reused across its faces. Temperature
-  spans are acquired inside each exchange after thermal swaps, never stored in
-  descriptors. Temporary metadata still uses scoped ownership and retryable
-  invalidation. No public API or upstream dependency change was needed.
-- W4 validation: 24 new integration cases; all 389 tests pass in Debug and Release
-  with zero build warnings/errors. New coverage includes exact floor/cardinal
-  membership and ordering across positive/negative chunk seams, all four signed
-  coordinate corners, distant placements, empty allocated chunks, shared walls,
-  permeable neighbours, compiled traversal order, repeated temperature swaps,
-  fresh mass after transport, the gas temperature floor, commit after clearing
-  dirty flags immediately before convection, final temperature publication, and
-  exact zero-allocation warmed sparse updates. Existing ownership, metadata
-  failure/retry, material invalidation, coupled timing and allocation tests pass.
-- W4 measurements: matched A1 -> B1 -> B2 -> A2 runs of all ten LowFidelity
-  benchmark cases, using identical benchmark code, published dependencies,
-  MediumRun/InProcessNoEmit configuration, host and runtime. A1/A2 ran a preserved
-  copy of the baseline Release binaries; B1/B2 ran the candidate. No other build,
-  test or benchmark ran concurrently. Reports remain in
-  `BenchmarkDotNet.Artifacts/correctness-w4-{A1,B1,B2,A2}`.
-  The existing dense 100x100 workload and its injection/tick/exchange assertions
-  are unchanged. The new workload uses four sealed 16x16 rooms, spaced 16 cells
-  apart when dense (32x32 total bounds) or 768 apart when sparse (784x784 bounds).
-  `Update` advances one real tick/exchange with ongoing gas/heat input.
-  `RebuildTopology` invalidates fully and updates with zero elapsed time: it
-  measures both children's metadata/solar preparation plus convection links,
-  not an isolated link-builder microbenchmark or skipped physics work.
+| Package | Status | Commit | Record |
+|---------|--------|--------|--------|
+| Baseline migration | Complete | `d4a463c` | [Baseline](EXPERIMENT.md#correctness-baseline-and-coupled-stepping) |
+| W1: compilation ownership | Complete | `2994f0d` | [Validation](EXPERIMENT.md#correctness-baseline-and-coupled-stepping) |
+| W2: structural lifecycle | Complete | `83bbaeb` | [Validation](EXPERIMENT.md#correctness-baseline-and-coupled-stepping) |
+| W3: explicit invalidation | Complete | `04c6f31` | [Validation](EXPERIMENT.md#correctness-baseline-and-coupled-stepping) |
+| W9: coupled stepping | Complete | `9844801` | [Corrected baseline](EXPERIMENT.md#correctness-baseline-and-coupled-stepping) |
+| W4: sparse convection | Retained | `27057fc` | [Experiment](EXPERIMENT.md#sparse-chunk-addressed-convection) |
+| W5: odd projection swap | Retained | `2311711` | [Experiment](EXPERIMENT.md#owner-mediated-odd-projection-swap) |
+| W6: thermal dirty traversal | Rejected; coverage retained | `ca3f906` | [Experiment](EXPERIMENT.md#thermal-dirty-marking-traversal) |
+| W7: public halo gathering | Rejected; coverage retained | `26c3ddb` | [Experiment](EXPERIMENT.md#public-halo-gathering) |
+| W8: publication topology cache | Not started | - | [Scope below](#w8-cache-publication-topology-until-explicit-invalidation) |
 
-  | Workload (all times us) | A1 | A2 | B1 | B2 | Mean time reduction |
-  |------------------------|---:|---:|---:|---:|--------------------:|
-  | Atmosphere.Update | 287.92 | 276.40 | 257.75 | 253.55 | 9.4% |
-  | ReadPressureFrame | 16.09 | 16.05 | 15.18 | 15.47 | 4.6% |
-  | Thermal.Update | 203.1 | 205.7 | 198.7 | 200.6 | 2.3% |
-  | Thermal.UpdateWithMovingSun | 239.8 | 230.9 | 235.6 | 228.4 | 1.4% |
-  | Coupled 100x100, one tick | 1228.0 | 1212.0 | 773.3 | 788.3 | 36.0% |
-  | Coupled 100x100, eight ticks | 9202.0 | 9384.0 | 5849.4 | 6453.5 | 33.8% |
-  | Four dense rooms, update | 105.6 | 105.3 | 65.40 | 63.46 | 38.9% |
-  | Four dense rooms, rebuild | 183.9 | 186.5 | 125.53 | 122.62 | 33.0% |
-  | Four sparse rooms, update | 189.9 | 184.1 | 147.82 | 147.67 | 21.0% |
-  | Four sparse rooms, rebuild | 4943.6 | 4282.5 | 875.50 | 872.31 | 81.1% |
-
-  Reductions compare the arithmetic mean of the two candidate run means with the
-  arithmetic mean of the two baseline run means; they are not pooled statistical
-  estimates. Both candidate runs clear 10% on repeated exchanges and sparse
-  rebuilds, even against the faster baseline run. No representative workload
-  has a confirmed slowdown, let alone one exceeding 10%. Standalone controls are
-  not claimed as attributable W4 speedups. `BENCHMARK.md` records B2 statistics;
-  unchanged core-kernel measurements are retained.
-- W4 allocation gates: all coupled benchmark setups warm 100 invocations and
-  require exactly zero current-thread bytes over another 100, including the
-  actual dense 100x100 one/eight-tick cases and both four-room layouts. All four
-  runs pass. B2's separate in-process BenchmarkDotNet figures remain reported
-  honestly: 6 B/45 B for dense one/eight ticks and 1 B for each four-room update.
-  Full rebuilds intentionally allocate (127985 B dense, 217876 B sparse); these
-  are outside unchanged-topology steady state. No new steady-state allocation
-  was measured.
-- W5: completed and retained for the representative retained-empty-chunk, low
-  odd-iteration workload. Projection and airflow Update accept the explicit
-  generic compiled owner first, with all production, test, benchmark and
-  visualizer consumers wired. Odd solves use the owner's pressure/scratch storage
-  swap; even solves need no final swap. Numerical kernels remain non-generic.
-  Bound pressure identity, dirty flags and warm starts are preserved, and the
-  gradient stage acquires spans after the swap. No context, delegate, internal
-  layer cast or upstream dependency change was introduced.
-- W5 validation: 46 new cases cover zero/one/two/three/20/21 iterations, repeated
-  warm starts with and without intervening commits, exact bound pressure output
-  and commit counts, unchanged unrelated cell values, negative coordinates and
-  chunk seams, retained empty chunks, entirely empty compilations, solved
-  gradients and zero warmed allocations for odd/even cases at chunk sizes 32/64.
-  The pre-existing projection fixture now uses one compiled owner for all layers
-  instead of three coincident layouts. Negative iterations are rejected at
-  construction: an odd negative count otherwise skips relaxation but would swap
-  an unsolved scratch buffer into pressure. Zero retains its existing no-relaxation
-  behavior. All 435 tests pass in Debug and Release, with no build warnings/errors.
-- W5 measurements: matched A1 -> B1 -> B2 -> A2 runs of all 15 core benchmark
-  cases, using identical benchmark workloads/configuration and published
-  dependencies. A1/A2 used preserved baseline Release binaries; B1/B2 used the
-  owner-swap candidate. The final constructor-only negative-iteration guard is
-  outside timed work; the measured valid-configuration Update body is unchanged.
-  Same MediumRun/InProcessNoEmit, 10 warmups/15 measurements, host and runtime as
-  W4; no other build/test/benchmark ran concurrently. Reports remain under
-  `BenchmarkDotNet.Artifacts/correctness-w5-{A1,B1,B2,A2}`.
-  Projection and composed airflow keep the original 100x100 occupied field with
-  32x32 chunks, and now parameterize 1/20/21 iterations and 0/128 retained empty
-  chunks. Empty chunks are produced by compiling occupied cells in additional
-  chunks and removing those cells through the live assembly; setup verifies the
-  exact empty-chunk count. Timed calls perform the full solve/composition and
-  caller velocity/concentration swaps, not an isolated copy/swap microbenchmark.
-
-  | Workload (all times us) | Iterations | Empty chunks | A1 | A2 | B1 | B2 | Mean time change |
-  |------------------------|-----------:|-------------:|---:|---:|---:|---:|-----------------:|
-  | Projection | 1 | 0 | 103.6 | 103.5 | 103.6 | 100.1 | -1.6% |
-  | Projection | 1 | 128 | 139.9 | 140.7 | 104.7 | 103.1 | -25.9% |
-  | Projection | 20 | 0 | 571.2 | 522.9 | 547.2 | 545.7 | -0.1% |
-  | Projection | 20 | 128 | 623.1 | 553.3 | 602.5 | 593.6 | +1.7% |
-  | Projection | 21 | 0 | 596.6 | 531.8 | 593.3 | 583.5 | +4.3% |
-  | Projection | 21 | 128 | 684.3 | 610.5 | 632.9 | 634.6 | -2.1% |
-  | Airflow | 1 | 0 | 327.3 | 335.8 | 326.2 | 326.6 | -1.6% |
-  | Airflow | 1 | 128 | 379.9 | 390.0 | 336.2 | 327.8 | -13.8% |
-  | Airflow | 20 | 0 | 816.0 | 774.8 | 786.1 | 839.4 | +2.2% |
-  | Airflow | 20 | 128 | 883.6 | 791.0 | 857.5 | 860.0 | +2.6% |
-  | Airflow | 21 | 0 | 775.6 | 780.6 | 831.5 | 806.6 | +5.3% |
-  | Airflow | 21 | 128 | 898.6 | 937.4 | 887.8 | 818.9 | -7.0% |
-  | Diffusion control | - | - | 27.78 | 24.92 | 26.65 | 26.77 | +1.4% |
-  | Pressure control | - | - | 27.14 | 26.51 | 26.96 | 26.59 | -0.2% |
-  | Advection control | - | - | 53.81 | 54.04 | 53.67 | 53.21 | -0.9% |
-
-  Changes compare the arithmetic means of the two candidate and two baseline
-  run means, not pooled statistical estimates. The retained-empty-chunk one-
-  iteration projection and complete airflow cases improve by more than 10% in
-  both candidate runs even against the faster baseline run. Normal dense and
-  high-iteration cases show no reliable improvement. Dense 21-iteration cases
-  averaged 4.3% slower for projection and 5.3% slower for airflow; these are
-  observed costs, not erased by the sparse win. High-iteration results are noisy,
-  with bimodal-distribution warnings in A2; no greater-than-10% slowdown is
-  confirmed across the repeated comparisons. Adoption is specific to the
-  demonstrated workload, not a claim to fix diffusion's historical regression.
-- W5 allocation gates: both projection and airflow benchmark setups warm 100
-  calls and require exactly zero current-thread managed bytes over another 100
-  for all six parameter combinations each. All four runs pass, as do the new
-  focused odd/even allocation tests. Separate in-process B2 allocation figures
-  (projection 1-6 B/call; airflow 2-6 B/call) are retained honestly in
-  `BENCHMARK.md`, which records B2 core statistics. W4 LowFidelity tables remain
-  unchanged because those workloads were not rerun for W5.
-- W6: completed, candidate rejected under D6. The prototype marked each computed
-  `_temperatureNext` chunk dirty after conduction/radiation, relying on the owner
-  swap to transfer those flags to bound temperature. It removed the second
-  dirty-only chunk traversal without changing physics, atmosphere's selected-
-  chunk handling, public APIs or dependencies. Correctness/allocation checks
-  passed, but representative end-to-end measurements did not demonstrate the
-  required repeatable 10% improvement. The runtime change was therefore reverted;
-  the post-revert Release runtime DLL matched the preserved baseline's SHA256.
-- W6 retained coverage: 19 new integration cases verify exact conduction across
-  a negative-coordinate chunk boundary, zero/one/two/three/eight ticks per update,
-  repeated swaps with and without intervening commits, stable bound temperature
-  identity, exact dirty commit counts, unchanged unrelated source fields, pending
-  added energy with and without a preceding commit, zero-step dirty preservation,
-  final solar-heated/radiatively cooled persistence, retained empty chunks,
-  entirely empty compilations, and exact zero warmed allocations with and without
-  commits. The full 454-test Release suite passed on the candidate. The retained
-  implementation passes all 454 tests in both Debug and Release, with zero build
-  warnings/errors. Thermal benchmark setup now enforces zero current-thread
-  allocations over 100 fixed-sun and 100 moving-sun calls after warming both;
-  each timed call also verifies exactly one actual thermal tick.
-- W6 measurements: matched A1 -> B1 -> B2 -> A2 runs of all ten LowFidelity
-  benchmark cases. Benchmark code, workloads and published dependencies were
-  identical between versions. A1/A2 used preserved baseline Release binaries;
-  B1/B2 used the single-traversal candidate. Baseline binary hashes were checked
-  before A1 and A2. Same MediumRun/InProcessNoEmit, 10 warmups/15 measurements,
-  host and runtime as W4; no other build/test/benchmark ran concurrently.
-  Reports remain under
-  `BenchmarkDotNet.Artifacts/correctness-w6-{A1,B1,B2,A2}`.
-  The intended primary workload was the existing 100x100 standalone thermal
-  update, not an isolated dirty-marking or empty-world microbenchmark. Moving
-  sun, dense coupled one/eight-tick updates and four dense/sparse rooms supplied
-  consumer-level comparisons; atmosphere, frame reads and metadata-only rebuilds
-  supplied controls.
-
-  | Workload (all times us) | A1 | A2 | B1 | B2 | Mean time change |
-  |------------------------|---:|---:|---:|---:|-----------------:|
-  | Atmosphere.Update | 281.46 | 266.94 | 272.77 | 248.29 | -5.0% |
-  | ReadPressureFrame | 16.62 | 15.72 | 16.14 | 15.12 | -3.3% |
-  | Thermal.Update | 208.3 | 198.6 | 214.7 | 201.4 | +2.3% |
-  | Thermal.UpdateWithMovingSun | 236.0 | 247.1 | 241.9 | 235.4 | -1.2% |
-  | Coupled 100x100, one tick | 789.4 | 865.3 | 822.8 | 833.1 | +0.1% |
-  | Coupled 100x100, eight ticks | 5827.6 | 6357.2 | 6006.2 | 5560.3 | -5.1% |
-  | Four dense rooms, update | 66.24 | 66.31 | 67.63 | 63.89 | -0.8% |
-  | Four dense rooms, rebuild | 126.23 | 134.35 | 125.16 | 125.11 | -4.0% |
-  | Four sparse rooms, update | 148.49 | 156.53 | 141.33 | 149.75 | -4.6% |
-  | Four sparse rooms, rebuild | 795.22 | 817.88 | 823.42 | 831.90 | +2.6% |
-
-  Changes compare the arithmetic means of the candidate and baseline run means,
-  not pooled statistical estimates. No workload demonstrates a repeatable 10%
-  improvement, and control drift/bimodal-distribution warnings prevent attributing
-  the small observed changes to W6. Thermal.Update was slower in both candidate
-  runs than in the faster baseline. No greater-than-10% slowdown is confirmed;
-  rejection is for failure to demonstrate the required gain, not a proven large
-  regression or correctness failure.
-- W6 allocation gates: standalone thermal and coupled dense/sparse benchmark
-  setups passed exact warmed zero-allocation checks in all four runs, as do the
-  new swap/commit allocation tests. Separate in-process BenchmarkDotNet figures
-  are preserved honestly: A2 reports 1 B for standalone thermal and four-room
-  updates, 6 B/47 B for dense coupled one/eight ticks. Rebuilds allocate by design.
-  `BENCHMARK.md` records A2 LowFidelity statistics for the retained implementation,
-  not the rejected candidate. Core W5 tables remain unchanged.
-- W7: completed, public-copy candidate rejected under D6/D7. Both internal gather
-  entry points were temporarily reduced to `IGridLayer<T>.CopyPadded(chunk, 1,
-  destination)`, so all existing callers consistently used the public API.
-  Numerical kernels, iteration counts, source inputs, traversal and ownership
-  were unchanged. Full-content and allocation checks passed, but the candidate
-  repeatedly made whole consumers substantially slower. Both specialized
-  gatherers were restored; their rebuilt Release DLLs matched the preserved
-  baseline SHA256 hashes. No production API or dependency change is retained.
-- W7 retained coverage: the two focused fixtures now contain 104 cases, 91 more
-  than before W7. They verify both float and Direction against an independent
-  world-coordinate oracle as well as each other. Shapes include full 3x3
-  neighbourhoods, partial chunks with holes, positive and negative placements,
-  cardinal/diagonal boundaries, isolated occupied chunks, retained empty chunks,
-  missing-neighbour zeroes, all padded corners, and nonzero-prefilled oversized
-  scratch with untouched suffixes. Core tests cover 32/64-cell chunks;
-  LowFidelity covers its fixed 32-cell layout. Both public and specialized paths
-  pass exact warmed zero-allocation checks for float/Direction and dense/isolated
-  gathers. No production gather uses bool, so no unused bool variant was added.
-  All 545 tests pass on the candidate in Release and on the retained code in
-  Debug and Release, with zero build warnings/errors.
-- W7 benchmark validation: atmosphere setup now warms 100 real updates and
-  requires exactly zero current-thread managed bytes over another 100; each
-  timed update verifies exactly one actual atmosphere tick. This setup also
-  means the pressure-frame read control reads a frame populated by real
-  updates, not just an initial frame. Benchmark code is identical for A/B.
-  Existing thermal, projection, composed airflow and dense/sparse coupled
-  allocation/tick/exchange checks remain enabled and pass in every run.
-- W7 measurements: matched A1 -> B1 -> B2 -> A2 runs of all 25 consumer cases
-  (15 core and 10 LowFidelity), sequentially with no concurrent build/test runs.
-  A1/A2 used preserved baseline Release binaries, with their hashes checked
-  before both runs; B1/B2 used the public-copy candidate. Same published
-  dependencies, MediumRun/InProcessNoEmit, 10 warmups/15 measurements, i7-9700K,
-  Windows 11 and .NET 10.0.13. Reports/logs remain under
-  `BenchmarkDotNet.Artifacts/correctness-w7-{A1,B1,B2,A2}-{core,lowfidelity}`.
-  These measure complete diffusion/pressure, projection/advection/airflow,
-  atmosphere/thermal and coupled updates, not isolated copies. Advection
-  includes both float and Direction gathers. Existing sparse and retained-
-  empty-chunk cases remain in the measured consumers.
-
-  | Workload (all times us) | Iterations | Empty chunks | A1 | A2 | B1 | B2 | Mean time change |
-  |------------------------|-----------:|-------------:|---:|---:|---:|---:|-----------------:|
-  | Diffusion | - | - | 27.74 | 25.47 | 31.22 | 32.37 | +19.5% |
-  | Pressure | - | - | 28.24 | 26.23 | 30.80 | 32.48 | +16.2% |
-  | Advection | - | - | 51.05 | 52.27 | 67.59 | 70.87 | +34.0% |
-  | Projection | 1 | 0 | 99.24 | 99.36 | 128.7 | 129.4 | +30.0% |
-  | Projection | 1 | 128 | 115.62 | 106.06 | 134.6 | 137.3 | +22.7% |
-  | Projection | 20 | 0 | 584.48 | 538.38 | 724.0 | 718.4 | +28.5% |
-  | Projection | 20 | 128 | 634.44 | 578.04 | 765.2 | 757.8 | +25.6% |
-  | Projection | 21 | 0 | 576.72 | 552.50 | 713.6 | 740.7 | +28.8% |
-  | Projection | 21 | 128 | 611.86 | 616.69 | 755.8 | 776.6 | +24.7% |
-  | Airflow | 1 | 0 | 295.8 | 320.9 | 411.8 | 430.7 | +36.6% |
-  | Airflow | 1 | 128 | 325.9 | 343.4 | 447.8 | 438.3 | +32.4% |
-  | Airflow | 20 | 0 | 764.4 | 756.5 | 1009.6 | 1001.3 | +32.2% |
-  | Airflow | 20 | 128 | 772.1 | 805.6 | 1056.8 | 1068.7 | +34.7% |
-  | Airflow | 21 | 0 | 738.0 | 808.6 | 989.0 | 1040.5 | +31.2% |
-  | Airflow | 21 | 128 | 795.4 | 839.4 | 1048.7 | 1066.2 | +29.4% |
-  | Atmosphere.Update | - | - | 251.41 | 268.54 | 356.75 | 416.91 | +48.8% |
-  | ReadPressureFrame control | - | - | 15.39 | 16.02 | 15.98 | 15.59 | +0.5% |
-  | Thermal.Update | - | - | 184.5 | 201.5 | 235.6 | 237.6 | +22.6% |
-  | Thermal.UpdateWithMovingSun | - | - | 233.3 | 238.8 | 275.0 | 270.7 | +15.6% |
-  | Coupled 100x100, one tick | - | - | 814.2 | 810.9 | 965.4 | 965.5 | +18.8% |
-  | Coupled 100x100, eight ticks | - | - | 5914.4 | 6201.4 | 7051.1 | 6848.1 | +14.7% |
-  | Four dense rooms, update | - | - | 66.66 | 68.47 | 77.55 | 75.85 | +13.5% |
-  | Four dense rooms, rebuild control | - | - | 124.19 | 129.86 | 120.17 | 120.75 | -5.2% |
-  | Four sparse rooms, update | - | - | 150.35 | 153.52 | 182.40 | 178.70 | +18.8% |
-  | Four sparse rooms, rebuild control | - | - | 882.48 | 834.41 | 856.07 | 839.22 | -1.3% |
-
-  Changes compare arithmetic means of the candidate and baseline run means,
-  not pooled statistical estimates. Results have drift and some bimodal-
-  distribution warnings, but the large slowdowns repeat against both baselines:
-  both candidate advection runs are at least 29% slower than the slower baseline,
-  and both candidate atmosphere runs at least 32% slower. Many other consumers
-  also exceed D7's 10% regression budget, while no intended workload demonstrates
-  a 10% improvement. The rejection is therefore not based on small control
-  fluctuations or an isolated microbenchmark. These regressions belong to the
-  rejected candidate and are not introduced into the retained implementation.
-- W7 allocation/result reporting: exact warmed helper and established consumer
-  allocation checks pass in both versions. Separate in-process BenchmarkDotNet
-  figures are retained honestly, not replaced by those exact checks.
-  `BENCHMARK.md` now records A2 statistics for all 25 retained cases: projection
-  1-6 B, airflow 3-6 B, atmosphere/frame reads zero, thermal/four-room updates 1 B,
-  dense coupled one/eight ticks 6 B/47 B; topology rebuilds allocate by design.
-  No upstream change is needed to retain the existing correct, faster path.
-  A dependency fast path remains possible future work, not a reason to consume
-  unpublished APIs or pass the D8 release gate in this package.
-- W8 is the remaining optional performance experiment. Retain it only if matched,
-  repeated measurements meet D6/D7.
+Latest implementation validation: all 545 tests pass in Debug and Release, with
+zero build warnings/errors. Detailed validation and measurements are maintained
+in [EXPERIMENT.md](EXPERIMENT.md). W8 remains the next work package.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation
 
@@ -671,7 +337,8 @@ historical regression.
 Priority: benchmark-gated optimization. Depends on W1.
 
 Status: completed and rejected under D6. Keep the existing post-swap dirty-marking
-traversal; see the progress section for the matched four-run evidence.
+traversal; see the [experiment record](EXPERIMENT.md#thermal-dirty-marking-traversal)
+for the matched four-run evidence.
 
 The evaluated candidate in
 [Thermal.cs](src/Kiyote/Simulations/LowFidelity/Kiyote.Simulations.LowFidelity/Thermals/Thermal.cs)
@@ -690,7 +357,8 @@ Priority: experiment; production changes depend on results and the D8 release ga
 
 Status: completed. The public-copy candidate failed D6/D7; retain the existing
 specialized helpers and the expanded full-content/allocation tests. See the
-progress section for four matched runs covering all 25 consumer benchmark cases.
+[experiment record](EXPERIMENT.md#public-halo-gathering) for four matched runs
+covering all 25 consumer benchmark cases.
 No unpublished dependency or upstream API change is required for this outcome.
 
 Compare the specialized helpers in
@@ -830,19 +498,8 @@ through selected cells/chunks and measure elapsed cost with benchmarks.
    result tables, include retained new benchmark cases, and remove no surviving
    class without a stated scope reason. Preserve the requested document format.
 
-Historical reference measurements (microseconds; not acceptance thresholds):
-
-| Method | Latest full run | Historical baseline | Interpretation |
-|--------|----------------:|--------------------:|----------------|
-| Diffusion.Update | 25.42 | 22.43 | Reproducible slowdown; investigate, do not assume cause |
-| Pressure.Update | 27.34 | 23.22 | Uses diffusion; reproducible slowdown |
-| Projection.Update | 555.0 | 563.8 | No established regression; even iterations |
-| Advection.Update | 51.97 | 52.28 | No established regression |
-| Airflow.Update | 765.4 | 756.3 | No established regression |
-| Atmosphere.Update | 262.11 | 246.15 | Possible slowdown; evidence inconclusive |
-| Atmosphere.ReadPressureFrame | 16.09 | 15.27 | Apparent slowdown did not reproduce |
-| Thermal.Update | 209.4 | 197.7 | Apparent slowdown did not reproduce |
-| Thermal.UpdateWithMovingSun | 233.9 | 231.6 | No established regression |
+Historical reference measurements and completed comparisons are maintained in
+[EXPERIMENT.md](EXPERIMENT.md#historical-migration-measurements), not in this plan.
 
 ## Execution order and verification
 
@@ -862,7 +519,8 @@ Historical reference measurements (microseconds; not acceptance thresholds):
    explicit frame invalidation, coupled timing, and intentional behavior changes.
 7. Run targeted core/LowFidelity tests, then the full solution build and test suites.
 8. Run final retained benchmarks, update tables, and summarize accepted/rejected
-   experiments, correctness outcomes, and measured regressions outside BENCHMARK.md.
+   experiments, correctness outcomes, and measured regressions in
+   [EXPERIMENT.md](EXPERIMENT.md).
 
 Existing validation entry points, from the repository root:
 
