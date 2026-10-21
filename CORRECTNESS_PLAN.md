@@ -411,8 +411,93 @@ to publish packages, push repositories, or rewrite their unrelated changes.
   updates, 6 B/47 B for dense coupled one/eight ticks. Rebuilds allocate by design.
   `BENCHMARK.md` records A2 LowFidelity statistics for the retained implementation,
   not the rejected candidate. Core W5 tables remain unchanged.
-- W7-W8 optional performance experiments have not started. W7 is next; retain
-  each candidate only if matched, repeated measurements meet D6/D7.
+- W7: completed, public-copy candidate rejected under D6/D7. Both internal gather
+  entry points were temporarily reduced to `IGridLayer<T>.CopyPadded(chunk, 1,
+  destination)`, so all existing callers consistently used the public API.
+  Numerical kernels, iteration counts, source inputs, traversal and ownership
+  were unchanged. Full-content and allocation checks passed, but the candidate
+  repeatedly made whole consumers substantially slower. Both specialized
+  gatherers were restored; their rebuilt Release DLLs matched the preserved
+  baseline SHA256 hashes. No production API or dependency change is retained.
+- W7 retained coverage: the two focused fixtures now contain 104 cases, 91 more
+  than before W7. They verify both float and Direction against an independent
+  world-coordinate oracle as well as each other. Shapes include full 3x3
+  neighbourhoods, partial chunks with holes, positive and negative placements,
+  cardinal/diagonal boundaries, isolated occupied chunks, retained empty chunks,
+  missing-neighbour zeroes, all padded corners, and nonzero-prefilled oversized
+  scratch with untouched suffixes. Core tests cover 32/64-cell chunks;
+  LowFidelity covers its fixed 32-cell layout. Both public and specialized paths
+  pass exact warmed zero-allocation checks for float/Direction and dense/isolated
+  gathers. No production gather uses bool, so no unused bool variant was added.
+  All 545 tests pass on the candidate in Release and on the retained code in
+  Debug and Release, with zero build warnings/errors.
+- W7 benchmark validation: atmosphere setup now warms 100 real updates and
+  requires exactly zero current-thread managed bytes over another 100; each
+  timed update verifies exactly one actual atmosphere tick. This setup also
+  means the pressure-frame read control reads a frame populated by real
+  updates, not just an initial frame. Benchmark code is identical for A/B.
+  Existing thermal, projection, composed airflow and dense/sparse coupled
+  allocation/tick/exchange checks remain enabled and pass in every run.
+- W7 measurements: matched A1 -> B1 -> B2 -> A2 runs of all 25 consumer cases
+  (15 core and 10 LowFidelity), sequentially with no concurrent build/test runs.
+  A1/A2 used preserved baseline Release binaries, with their hashes checked
+  before both runs; B1/B2 used the public-copy candidate. Same published
+  dependencies, MediumRun/InProcessNoEmit, 10 warmups/15 measurements, i7-9700K,
+  Windows 11 and .NET 10.0.13. Reports/logs remain under
+  `BenchmarkDotNet.Artifacts/correctness-w7-{A1,B1,B2,A2}-{core,lowfidelity}`.
+  These measure complete diffusion/pressure, projection/advection/airflow,
+  atmosphere/thermal and coupled updates, not isolated copies. Advection
+  includes both float and Direction gathers. Existing sparse and retained-
+  empty-chunk cases remain in the measured consumers.
+
+  | Workload (all times us) | Iterations | Empty chunks | A1 | A2 | B1 | B2 | Mean time change |
+  |------------------------|-----------:|-------------:|---:|---:|---:|---:|-----------------:|
+  | Diffusion | - | - | 27.74 | 25.47 | 31.22 | 32.37 | +19.5% |
+  | Pressure | - | - | 28.24 | 26.23 | 30.80 | 32.48 | +16.2% |
+  | Advection | - | - | 51.05 | 52.27 | 67.59 | 70.87 | +34.0% |
+  | Projection | 1 | 0 | 99.24 | 99.36 | 128.7 | 129.4 | +30.0% |
+  | Projection | 1 | 128 | 115.62 | 106.06 | 134.6 | 137.3 | +22.7% |
+  | Projection | 20 | 0 | 584.48 | 538.38 | 724.0 | 718.4 | +28.5% |
+  | Projection | 20 | 128 | 634.44 | 578.04 | 765.2 | 757.8 | +25.6% |
+  | Projection | 21 | 0 | 576.72 | 552.50 | 713.6 | 740.7 | +28.8% |
+  | Projection | 21 | 128 | 611.86 | 616.69 | 755.8 | 776.6 | +24.7% |
+  | Airflow | 1 | 0 | 295.8 | 320.9 | 411.8 | 430.7 | +36.6% |
+  | Airflow | 1 | 128 | 325.9 | 343.4 | 447.8 | 438.3 | +32.4% |
+  | Airflow | 20 | 0 | 764.4 | 756.5 | 1009.6 | 1001.3 | +32.2% |
+  | Airflow | 20 | 128 | 772.1 | 805.6 | 1056.8 | 1068.7 | +34.7% |
+  | Airflow | 21 | 0 | 738.0 | 808.6 | 989.0 | 1040.5 | +31.2% |
+  | Airflow | 21 | 128 | 795.4 | 839.4 | 1048.7 | 1066.2 | +29.4% |
+  | Atmosphere.Update | - | - | 251.41 | 268.54 | 356.75 | 416.91 | +48.8% |
+  | ReadPressureFrame control | - | - | 15.39 | 16.02 | 15.98 | 15.59 | +0.5% |
+  | Thermal.Update | - | - | 184.5 | 201.5 | 235.6 | 237.6 | +22.6% |
+  | Thermal.UpdateWithMovingSun | - | - | 233.3 | 238.8 | 275.0 | 270.7 | +15.6% |
+  | Coupled 100x100, one tick | - | - | 814.2 | 810.9 | 965.4 | 965.5 | +18.8% |
+  | Coupled 100x100, eight ticks | - | - | 5914.4 | 6201.4 | 7051.1 | 6848.1 | +14.7% |
+  | Four dense rooms, update | - | - | 66.66 | 68.47 | 77.55 | 75.85 | +13.5% |
+  | Four dense rooms, rebuild control | - | - | 124.19 | 129.86 | 120.17 | 120.75 | -5.2% |
+  | Four sparse rooms, update | - | - | 150.35 | 153.52 | 182.40 | 178.70 | +18.8% |
+  | Four sparse rooms, rebuild control | - | - | 882.48 | 834.41 | 856.07 | 839.22 | -1.3% |
+
+  Changes compare arithmetic means of the candidate and baseline run means,
+  not pooled statistical estimates. Results have drift and some bimodal-
+  distribution warnings, but the large slowdowns repeat against both baselines:
+  both candidate advection runs are at least 29% slower than the slower baseline,
+  and both candidate atmosphere runs at least 32% slower. Many other consumers
+  also exceed D7's 10% regression budget, while no intended workload demonstrates
+  a 10% improvement. The rejection is therefore not based on small control
+  fluctuations or an isolated microbenchmark. These regressions belong to the
+  rejected candidate and are not introduced into the retained implementation.
+- W7 allocation/result reporting: exact warmed helper and established consumer
+  allocation checks pass in both versions. Separate in-process BenchmarkDotNet
+  figures are retained honestly, not replaced by those exact checks.
+  `BENCHMARK.md` now records A2 statistics for all 25 retained cases: projection
+  1-6 B, airflow 3-6 B, atmosphere/frame reads zero, thermal/four-room updates 1 B,
+  dense coupled one/eight ticks 6 B/47 B; topology rebuilds allocate by design.
+  No upstream change is needed to retain the existing correct, faster path.
+  A dependency fast path remains possible future work, not a reason to consume
+  unpublished APIs or pass the D8 release gate in this package.
+- W8 is the remaining optional performance experiment. Retain it only if matched,
+  repeated measurements meet D6/D7.
 
 ### W1. Establish one compilation owner and remove unsupported recompilation
 
@@ -602,6 +687,11 @@ and inactive scratch chunks can be stale.
 ### W7. Measure halo gathering through the current public API
 
 Priority: experiment; production changes depend on results and the D8 release gate.
+
+Status: completed. The public-copy candidate failed D6/D7; retain the existing
+specialized helpers and the expanded full-content/allocation tests. See the
+progress section for four matched runs covering all 25 consumer benchmark cases.
+No unpublished dependency or upstream API change is required for this outcome.
 
 Compare the specialized helpers in
 [TopologyChunk.cs](src/Kiyote/Simulations/Kiyote.Simulations/Topology/TopologyChunk.cs) and

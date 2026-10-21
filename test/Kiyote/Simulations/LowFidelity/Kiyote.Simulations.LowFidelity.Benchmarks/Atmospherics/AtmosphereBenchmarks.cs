@@ -48,12 +48,29 @@ public class AtmosphereBenchmarks {
 		_atmosphere.AddGas( 50, 50, _gas, 1000f );
 	}
 
+	[GlobalSetup]
+	public void WarmupAndValidateAllocations() {
+		for( int i = 0; i < 100; i++ ) {
+			Update();
+		}
+		long before = GC.GetAllocatedBytesForCurrentThread();
+		for( int i = 0; i < 100; i++ ) {
+			Update();
+		}
+		long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+		if( allocated != 0 ) {
+			throw new InvalidOperationException( $"Warmed atmosphere updates allocated {allocated} managed bytes." );
+		}
+	}
+
 	[Benchmark]
 	public void Update() {
 		// Keep a source running so chunks never settle and go to sleep,
 		// keeping the work per step comparable to the always-on airflow benchmark.
 		_atmosphere.AddGas( 50, 50, _gas, 1f );
-		_ = _atmosphere.Update( Step );
+		if( _atmosphere.Update( Step ) != 1 ) {
+			throw new InvalidOperationException( "The benchmark did not advance exactly one atmosphere tick." );
+		}
 	}
 
 	// What a render thread pays to read one published quantity.
