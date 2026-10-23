@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.IntegrationTests;
@@ -120,23 +119,24 @@ internal sealed class AtmosphereTests {
 		_ = _atmosphere.Update( Frame );
 
 		long step = frames.StepCount;
-		TripleBufferedLease<float> held = frames.AcquireGas( nitrogen );
-		float[] gas = Snapshot( held );
+		AtmosphereFrameLease held = frames.AcquireLatest();
+		float[] gas = Snapshot( held.GetGas( nitrogen ) );
 		for( int i = 0; i < 10; i++ ) {
 			_atmosphere.AddGas( 5, 5, nitrogen, 100.0f );
 			_ = _atmosphere.Update( Frame );
 		}
 
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( Snapshot( held ), Is.EqualTo( gas ) );
-			Assert.That( held.TryGet( 5, 5, out float value ) && value > 0.0f, Is.True );
+			Assert.That( Snapshot( held.GetGas( nitrogen ) ), Is.EqualTo( gas ) );
+			Assert.That( held.GetGas( nitrogen ).TryGet( 5, 5, out float value ) && value > 0.0f, Is.True );
+			Assert.That( held.StepCount, Is.EqualTo( step ) );
 		}
 		held.Dispose();
 
-		using TripleBufferedLease<float> latest = frames.AcquireGas( nitrogen );
+		using AtmosphereFrameLease latest = frames.AcquireLatest();
 		using( Assert.EnterMultipleScope() ) {
-			Assert.That( frames.StepCount, Is.EqualTo( step + 10 ) );
-			Assert.That( latest.TryGet( 5, 5, out float value ), Is.True );
+			Assert.That( latest.StepCount, Is.EqualTo( step + 10 ) );
+			Assert.That( latest.GetGas( nitrogen ).TryGet( 5, 5, out float value ), Is.True );
 			Assert.That( value, Is.EqualTo( _atmosphere.GetGas( nitrogen )[5, 5] ) );
 		}
 	}
@@ -148,7 +148,8 @@ internal sealed class AtmosphereTests {
 
 		_ = _atmosphere.Update( Frame );
 
-		using TripleBufferedLease<float> pressure = _atmosphere.Frames.AcquirePressure();
+		using AtmosphereFrameLease frame = _atmosphere.Frames.AcquireLatest();
+		SimulationFrameLayer pressure = frame.Pressure;
 		using( Assert.EnterMultipleScope() ) {
 			Assert.That( pressure.TryGet( 5, 5, out float value ), Is.True );
 			Assert.That( value, Is.EqualTo( _atmosphere.Pressure[5, 5] ) );
@@ -165,7 +166,8 @@ internal sealed class AtmosphereTests {
 
 		_ = _atmosphere.Update( Frame );
 
-		using TripleBufferedLease<float> gas = _atmosphere.Frames.AcquireGas( nitrogen );
+		using AtmosphereFrameLease frame = _atmosphere.Frames.AcquireLatest();
+		SimulationFrameLayer gas = frame.GetGas( nitrogen );
 		Assert.That( gas.TryGet( 25, 5, out float value ) && value > 0.0f, Is.True );
 	}
 
@@ -180,11 +182,11 @@ internal sealed class AtmosphereTests {
 
 		Thread reader = new Thread( () => {
 			while( !done.IsCancellationRequested && failure is null ) {
-				long step = frames.StepCount;
-				using TripleBufferedLease<float> held = frames.AcquireGas( nitrogen );
-				float before = SumOf( held );
+				using AtmosphereFrameLease held = frames.AcquireLatest();
+				long step = held.StepCount;
+				float before = SumOf( held.GetGas( nitrogen ) );
 				Thread.SpinWait( 100 );
-				float after = SumOf( held );
+				float after = SumOf( held.GetGas( nitrogen ) );
 				if( step < lastStep ) {
 					failure = $"Step went backwards: {step} < {lastStep}";
 				} else if( before != after ) {
@@ -236,21 +238,21 @@ internal sealed class AtmosphereTests {
 	}
 
 	private static float[] Snapshot(
-		TripleBufferedLease<float> lease
+		SimulationFrameLayer layer
 	) {
 		List<float> values = [];
-		foreach( GridChunk<float> chunk in lease.EnumerateChunks() ) {
-			values.AddRange( chunk.Values );
+		foreach( int chunk in layer.EnumerateChunks() ) {
+			values.AddRange( layer.GetValues( chunk ) );
 		}
 		return [.. values];
 	}
 
 	private static float SumOf(
-		TripleBufferedLease<float> lease
+		SimulationFrameLayer layer
 	) {
 		float sum = 0.0f;
-		foreach( GridChunk<float> chunk in lease.EnumerateChunks() ) {
-			foreach( float value in chunk.Values ) {
+		foreach( int chunk in layer.EnumerateChunks() ) {
+			foreach( float value in layer.GetValues( chunk ) ) {
 				sum += value;
 			}
 		}

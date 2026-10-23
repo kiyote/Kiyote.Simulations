@@ -251,7 +251,8 @@ internal sealed class ConvectionStorageTests {
 		Assert.That( saved.StructureTemperature, Is.GreaterThan( 200.0f ) );
 		Assert.That( saved.GasTemperature, Is.EqualTo( _simulation.Atmosphere.Temperature[0, 0] ) );
 		Assert.That( saved.StructureTemperature, Is.EqualTo( _simulation.Thermal.Temperature[0, 0] ) );
-		using var temperature = _simulation.Atmosphere.Frames.AcquireTemperature();
+		using AtmosphereFrameLease frame = _simulation.Frames.AcquireLatest();
+		SimulationFrameLayer temperature = frame.Temperature;
 		Assert.That( temperature.TryGet( 0, 0, out float published ), Is.True );
 		Assert.That( published, Is.EqualTo( saved.GasTemperature ) );
 	}

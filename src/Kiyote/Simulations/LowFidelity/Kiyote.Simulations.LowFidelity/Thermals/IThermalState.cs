@@ -7,7 +7,7 @@ public interface IThermalState {
 
 	IMaterialRegistry Materials { get; }
 
-	// Kelvin per cell.
+	// Kelvin per cell, for the simulation thread. Coupled readers use IAtmosphericThermals.Frames.
 	IGridLayer<float> Temperature { get; }
 
 	// Direction from the ship towards the sun, or a zero vector for no sun.

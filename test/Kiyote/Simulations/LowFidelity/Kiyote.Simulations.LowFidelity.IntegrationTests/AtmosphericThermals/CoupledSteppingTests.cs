@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
 using Kiyote.Simulations.LowFidelity.Thermals;
@@ -31,7 +30,7 @@ internal sealed class CoupledSteppingTests {
 		Assert.That( harness.Trace.Events, Is.EqualTo( "ATEATEATEP".ToCharArray() ) );
 		Assert.That( harness.Trace.PublishedStepsDuringExchange, Is.EqualTo( new long[] { 0, 0, 0 } ) );
 		Assert.That( harness.Simulation.Atmosphere.Frames.StepCount, Is.EqualTo( 3 ) );
-		AssertFrames( harness.Simulation.Atmosphere );
+		AssertFrames( harness.Simulation );
 	}
 
 	[TestCase( 100, 30, 10 )]
@@ -156,7 +155,7 @@ internal sealed class CoupledSteppingTests {
 		Assert.That( atmosphere.Frames.StepCount, Is.Zero );
 		Assert.That( atmosphere.GetTotalGas( 1, 1 ), Is.EqualTo( 105.0f ) );
 		Assert.That( harness.Simulation.Thermal.Temperature[1, 1], Is.EqualTo( 201.0f ) );
-		AssertFrames( atmosphere );
+		AssertFrames( harness.Simulation );
 	}
 
 	[Test]
@@ -169,19 +168,22 @@ internal sealed class CoupledSteppingTests {
 
 		Assert.That( harness.Trace.PublishedStepsDuringExchange, Is.EqualTo( new long[] { 1, 1, 1 } ) );
 		Assert.That( harness.Simulation.Atmosphere.Temperature[1, 1], Is.LessThan( 300.0f ) );
-		AssertFrames( harness.Simulation.Atmosphere );
+		AssertFrames( harness.Simulation );
 	}
 
 	[Test]
 	public void Update_ReaderHoldsOldTemperatureLease_NeverChangesTheLeasedBuffer() {
 		Harness harness = Create();
-		using TripleBufferedLease<float> old = harness.Simulation.Atmosphere.Frames.AcquireTemperature();
+		using AtmosphereFrameLease old = harness.Simulation.Frames.AcquireLatest();
+		float structureBefore = old.StructuralTemperature[1, 1];
 
 		_ = harness.Simulation.Update( TimeSpan.FromMilliseconds( 300 ) );
 		_ = harness.Simulation.Update( TimeSpan.FromMilliseconds( 300 ) );
 
-		Assert.That( old.TryGet( 1, 1, out float temperature ), Is.True );
+		Assert.That( old.Temperature.TryGet( 1, 1, out float temperature ), Is.True );
 		Assert.That( temperature, Is.EqualTo( 300.0f ) );
+		Assert.That( old.StructuralTemperature[1, 1], Is.EqualTo( structureBefore ) );
+		Assert.That( old.StepCount, Is.Zero );
 		Assert.That( harness.Simulation.Atmosphere.Temperature[1, 1], Is.LessThan( temperature ) );
 	}
 
@@ -349,14 +351,16 @@ internal sealed class CoupledSteppingTests {
 		return harness;
 	}
 
-	private static void AssertFrames( IAtmosphereState atmosphere ) {
+	private static void AssertFrames( IAtmosphericThermals simulation ) {
+		IAtmosphereState atmosphere = simulation.Atmosphere;
 		GasIndex nitrogen = atmosphere.Gases.GetIndex( "N2" );
-		using TripleBufferedLease<float> pressure = atmosphere.Frames.AcquirePressure();
-		using TripleBufferedLease<float> temperature = atmosphere.Frames.AcquireTemperature();
-		using TripleBufferedLease<float> gas = atmosphere.Frames.AcquireGas( nitrogen );
-		using TripleBufferedLease<float> condensate = atmosphere.Frames.AcquireCondensate( nitrogen );
-		using TripleBufferedLease<float> windX = atmosphere.Frames.AcquireWindX();
-		using TripleBufferedLease<float> windY = atmosphere.Frames.AcquireWindY();
+		using AtmosphereFrameLease frame = simulation.Frames.AcquireLatest();
+		SimulationFrameLayer pressure = frame.Pressure;
+		SimulationFrameLayer temperature = frame.Temperature;
+		SimulationFrameLayer gas = frame.GetGas( nitrogen );
+		SimulationFrameLayer condensate = frame.GetCondensate( nitrogen );
+		SimulationFrameLayer windX = frame.WindX;
+		SimulationFrameLayer windY = frame.WindY;
 		Assert.That( pressure.TryGet( 1, 1, out float p ), Is.True );
 		Assert.That( temperature.TryGet( 1, 1, out float t ), Is.True );
 		Assert.That( gas.TryGet( 1, 1, out float g ), Is.True );
@@ -370,6 +374,9 @@ internal sealed class CoupledSteppingTests {
 		Assert.That( c, Is.EqualTo( atmosphere.GetCondensate( nitrogen )[1, 1] ) );
 		Assert.That( x, Is.EqualTo( atmosphere.WindX[1, 1] ) );
 		Assert.That( y, Is.EqualTo( atmosphere.WindY[1, 1] ) );
+		Assert.That( frame.HasStructuralTemperature, Is.True );
+		Assert.That( frame.StructuralTemperature[1, 1], Is.EqualTo( simulation.Thermal.Temperature[1, 1] ) );
+		Assert.That( frame.Vented, Is.EqualTo( atmosphere.Vented ) );
 	}
 
 	private static void AssertState( IAtmosphericThermals actual, IAtmosphericThermals expected ) {

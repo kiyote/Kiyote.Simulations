@@ -139,14 +139,18 @@ The simulation thread rewrites those layers while it advances. The render thread
 
 ```csharp
 // Render thread
-IAtmosphereFrames frames = atmosphere.Frames;
-using( TripleBufferedLease<float> pressure = frames.AcquirePressure() ) {
-  foreach( GridChunk<float> chunk in pressure.EnumerateChunks() ) {
-    for( int row = 0; row < chunk.Size; row++ ) {
-      Span<float> values = chunk.GetRowValues( row );
-      for( int column = 0; column < chunk.Size; column++ ) {
-        if( chunk.IsPopulated( column, row ) ) {
-          Draw( chunk.Column + column, chunk.Row + row, values[column] );
+using( AtmosphereFrameLease frame = atmosphere.Frames.AcquireLatest() ) {
+  SimulationFrameLayer pressure = frame.Pressure;
+  foreach( int chunk in pressure.EnumerateChunks() ) {
+    ReadOnlySpan<float> values = pressure.GetValues( chunk );
+    int originColumn = pressure.GetChunkColumn( chunk ) * pressure.ChunkSize;
+    int originRow = pressure.GetChunkRow( chunk ) * pressure.ChunkSize;
+    for( int row = 0; row < pressure.ChunkSize; row++ ) {
+      for( int column = 0; column < pressure.ChunkSize; column++ ) {
+        int x = originColumn + column;
+        int y = originRow + row;
+        if( pressure.IsPopulated( x, y ) ) {
+          Draw( x, y, values[row * pressure.ChunkSize + column] );
         }
       }
     }
@@ -157,29 +161,32 @@ using( TripleBufferedLease<float> pressure = frames.AcquirePressure() ) {
 
 ### What the frames contain
 
-Each published quantity is its own `TripleBufferedChunkedGrid<float>` (Kiyote.Buffers) with the same chunk size and populated cells as the simulation:
+`AcquireLatest()` returns one lease covering every quantity, with a single immutable
+topology shared by all its layers. Layer properties return read-only views, not
+additional leases:
 
 | Member | Meaning |
 |---|---|
-| `StepCount` | Total fixed steps run when the most recent frames were published. |
-| `Vented` | Gas lost to space during the `Update` that published the most recent frames. |
+| `StepCount` | Total fixed physics steps when this frame was published. Zero-step publications do not advance it. |
+| `Vented` | Gas lost to space during the `Update` that published this frame. |
 | `Gases` | The gas registry, for names and indices. |
-| `AcquirePressure`, `AcquireTemperature`, `AcquireWindX`, `AcquireWindY` | Lease the latest published values. |
-| `AcquireGas( gas )` | Lease the latest published amount of a gas. |
-| `AcquireCondensate( gas )` | Lease the latest published condensate; throws `ArgumentException` for gases that do not condense. |
+| `Pressure`, `Temperature`, `WindX`, `WindY` | Published atmosphere layers from this frame. |
+| `GetGas( gas )` | Published amount of a gas. |
+| `GetCondensate( gas )` | Published condensate; throws `ArgumentException` for gases that do not condense. |
+| `HasStructuralTemperature`, `StructuralTemperature` | Coupled frames include structure temperature after stepping and convection. Standalone atmosphere frames do not; accessing the absent layer throws `InvalidOperationException`. |
 
 Unoccupied cells are not populated in a lease, so `TryGet` returns `false` for them.
 
 ### How it works
 
-- At the end of every `Update` the simulation copies each quantity into the buffer of its triple-buffered grid that is neither the latest nor leased, then calls `Swap` to publish it. `Swap` and `Acquire` are lock-free, so neither thread ever blocks or waits on the other.
-- While a lease is held the simulation never writes its buffer, so the data is stable until the lease is disposed.
+- Three whole-frame slots rotate through producer, consumer and atomic exchange roles. The producer copies all quantities and writes diagnostics into its private slot, then publishes the complete frame with one `Interlocked.Exchange`. Acquisition exchanges the consumer slot only when a newer frame is available. Neither thread waits for the other.
+- While a lease is held the simulation never writes its slot, so all layers, topology and metadata stay stable until disposal. Initial/topology-rebuild allocations are outside warmed-up steady state; acquisition itself never allocates or copies layers.
 - If the simulation advances several times between acquisitions, the reader sees only the latest values; intermediate frames are skipped.
-- When the populated cells change (cells added or removed, or a recompile) the simulation publishes into a new set of grids and swaps the set in atomically. Leases on the previous grids stay valid until disposed, so topology changes need no external synchronization.
+- When populated cells change, publication creates a new immutable layout and source-chunk mapping. Writable slots adopt the new layout without changing a held frame. A failed copy publishes nothing and preserves the previous frame and diagnostics for retry.
 
 ### Constraints
 
 - **Single reader.** Only one thread may acquire leases.
-- **One lease per quantity.** Dispose a lease before acquiring the same quantity again. Leases of different quantities can be held together.
-- **Not coherent across quantities.** Each quantity is leased independently, so two leases may come from different `Update`s. Acquire everything you need back-to-back and compare `StepCount` before and after if exact coherence matters.
-- **Read-only.** Leased buffers must never be modified, and a lease must not be used after it is disposed.
+- **One whole-frame lease.** Dispose it before acquiring again, even across topology changes. Overlapping acquisitions throw `InvalidOperationException`; disposing an old copy cannot release a newer lease.
+- **Coherent across quantities.** Every layer and the lease's `StepCount`/`Vented` belong to the same completed update. The provider's unleased diagnostics are not a substitute for reading the lease's metadata.
+- **Read-only.** Layer views and spans must not be used after the lease is disposed.

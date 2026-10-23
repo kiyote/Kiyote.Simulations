@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.AtmosphericThermals;
@@ -399,8 +398,8 @@ internal sealed class CompilationOwnershipTests {
 		Assert.That( _source.GetCell( 1, 1 ), Is.EqualTo( retained ) );
 		IAtmosphereState atmosphere = GetAtmosphere( replacement );
 		if( atmosphere is not null ) {
-			using TripleBufferedLease<float> frame = atmosphere.Frames.AcquirePressure();
-			Assert.That( frame.IsPopulated( 1, 1 ), Is.False );
+			using AtmosphereFrameLease frame = atmosphere.Frames.AcquireLatest();
+			Assert.That( frame.Pressure.IsPopulated( 1, 1 ), Is.False );
 		}
 	}
 
@@ -499,8 +498,8 @@ internal sealed class CompilationOwnershipTests {
 		IAtmosphereState previous = GetAtmosphere( original );
 		IAtmosphereFrames previousFrames = previous.Frames;
 		GasIndex gas = previous.Gases.GetIndex( "N2" );
-		using TripleBufferedLease<float> held = previousFrames.AcquireGas( gas );
-		float[] snapshot = Snapshot( held );
+		using AtmosphereFrameLease held = previousFrames.AcquireLatest();
+		float[] snapshot = Snapshot( held.GetGas( gas ) );
 		Assert.That( previousFrames.StepCount, Is.EqualTo( 1 ) );
 		Assert.That( previous.Vented, Is.GreaterThan( 0.0f ) );
 		Assert.That( MathF.Abs( previous.WindX[0, 1] ), Is.GreaterThan( 0.0f ) );
@@ -526,13 +525,13 @@ internal sealed class CompilationOwnershipTests {
 		_ = Update( replacement, Step );
 		_ = Update( replacement, Step );
 
-		using TripleBufferedLease<float> fresh = current.Frames.AcquireGas( gas );
+		using AtmosphereFrameLease fresh = current.Frames.AcquireLatest();
 		using( Assert.EnterMultipleScope() ) {
 			Assert.That( current.Frames.StepCount, Is.EqualTo( 2 ) );
 			Assert.That( previousFrames.StepCount, Is.EqualTo( 1 ) );
-			Assert.That( Snapshot( held ), Is.EqualTo( snapshot ) );
-			Assert.That( held.IsPopulated( 64, 0 ), Is.False );
-			Assert.That( fresh.IsPopulated( 64, 0 ), Is.True );
+			Assert.That( Snapshot( held.GetGas( gas ) ), Is.EqualTo( snapshot ) );
+			Assert.That( held.Pressure.IsPopulated( 64, 0 ), Is.False );
+			Assert.That( fresh.Pressure.IsPopulated( 64, 0 ), Is.True );
 		}
 	}
 
@@ -684,11 +683,11 @@ internal sealed class CompilationOwnershipTests {
 	}
 
 	private static float[] Snapshot(
-		TripleBufferedLease<float> lease
+		SimulationFrameLayer layer
 	) {
 		List<float> values = [];
-		foreach( GridChunk<float> chunk in lease.EnumerateChunks() ) {
-			values.AddRange( chunk.Values );
+		foreach( int chunk in layer.EnumerateChunks() ) {
+			values.AddRange( layer.GetValues( chunk ) );
 		}
 		return [.. values];
 	}

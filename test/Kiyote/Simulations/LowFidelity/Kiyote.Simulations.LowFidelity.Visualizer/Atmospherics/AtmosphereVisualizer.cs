@@ -1,5 +1,4 @@
 using System.IO.Abstractions;
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Buffers.Numerics;
 using Kiyote.Geometry.Topology;
 using Kiyote.Imaging;
@@ -66,7 +65,8 @@ internal sealed class AtmosphereVisualizer {
 			_ = atmosphere.Update( FrameTime );
 
 			// Read the published frame, as a render thread would, rather than the live layer.
-			using( TripleBufferedLease<float> pressure = atmosphere.Frames.AcquirePressure() ) {
+			using( AtmosphereFrameLease snapshot = atmosphere.Frames.AcquireLatest() ) {
+				SimulationFrameLayer pressure = snapshot.Pressure;
 				for( int row = 0; row < AsciiGridSource.Height; row++ ) {
 					for( int column = 0; column < AsciiGridSource.Width; column++ ) {
 						_values[column, row] = pressure.TryGet( column, row, out float value ) ? value : 0.0f;

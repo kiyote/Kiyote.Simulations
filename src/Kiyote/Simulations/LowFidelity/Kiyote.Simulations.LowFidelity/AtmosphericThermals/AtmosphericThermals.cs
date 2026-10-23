@@ -86,6 +86,7 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 			ArgumentOutOfRangeException.ThrowIfNegativeOrZero( thermalCap, nameof( IThermalsSettings.MaxStepsPerUpdate ) );
 			_maxStepsPerUpdate = Math.Min( atmosphereCap, thermalCap );
 			BuildLinks();
+			_atmosphere.Publish( ( (IThermalState)_thermal ).Temperature );
 			initialized = true;
 		} finally {
 			if( !initialized ) {
@@ -98,6 +99,8 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 	IAtmosphereState IAtmosphericThermals.Atmosphere => _atmosphere;
 
 	IThermalState IAtmosphericThermals.Thermal => _thermal;
+
+	IAtmosphereFrames IAtmosphericThermals.Frames => ( (IAtmosphereState)_atmosphere ).Frames;
 
 	int IAtmosphericThermals.Update(
 		TimeSpan elapsed
@@ -141,7 +144,7 @@ internal sealed class AtmosphericThermals<TCell, TAtmosphereStrategy, TThermalSt
 				exchanges++;
 			}
 		}
-		_atmosphere.Publish();
+		_atmosphere.Publish( ( (IThermalState)_thermal ).Temperature );
 		return exchanges;
 	}
 

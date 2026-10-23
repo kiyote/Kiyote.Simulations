@@ -676,7 +676,9 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere, IAtmosphereCon
 	}
 
 	// Recomputes pressure and wind for chunks touched since the last publish, then publishes frames.
-	internal void Publish() {
+	internal void Publish(
+		IGridLayer<float>? structuralTemperature = null
+	) {
 		GridLayout layout = _compiled.ChunkLayout;
 		float windScale = _settings.WindScale * 0.5f;
 
@@ -703,7 +705,7 @@ internal sealed class Atmosphere<TCell, TStrategy> : IAtmosphere, IAtmosphereCon
 		}
 		Array.Clear( _publish );
 
-		_frames.Publish( _stepCount, _vented, _pressure, _temperature, _windX, _windY, _gas, _condensate );
+		_frames.Publish( _stepCount, _vented, _pressure, _temperature, _windX, _windY, _gas, _condensate, structuralTemperature );
 	}
 
 	private void SumGas(

@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.AtmosphericThermals;
@@ -76,8 +75,9 @@ internal sealed class TopologyInvalidationTests {
 
 		Assert.That( Update( TimeSpan.Zero ), Is.Zero );
 
-		using TripleBufferedLease<float> pressure = atmosphere.Frames.AcquirePressure();
-		using TripleBufferedLease<float> gas = atmosphere.Frames.AcquireGas( atmosphere.Gases.GetIndex( "N2" ) );
+		using AtmosphereFrameLease frame = atmosphere.Frames.AcquireLatest();
+		SimulationFrameLayer pressure = frame.Pressure;
+		SimulationFrameLayer gas = frame.GetGas( atmosphere.Gases.GetIndex( "N2" ) );
 		using( Assert.EnterMultipleScope() ) {
 			Assert.That( _compiled.IsStale, Is.False );
 			Assert.That( pressure.TryGet( 1, 2, out float value ), Is.True );
@@ -97,8 +97,9 @@ internal sealed class TopologyInvalidationTests {
 
 		Assert.That( Update( TimeSpan.Zero ), Is.Zero );
 
-		using TripleBufferedLease<float> pressure = atmosphere.Frames.AcquirePressure();
-		using TripleBufferedLease<float> wind = atmosphere.Frames.AcquireWindX();
+		using AtmosphereFrameLease frame = atmosphere.Frames.AcquireLatest();
+		SimulationFrameLayer pressure = frame.Pressure;
+		SimulationFrameLayer wind = frame.WindX;
 		Assert.That( pressure.TryGet( 32, 2, out float value ) && value > 0.0f, Is.True );
 		Assert.That( wind.TryGet( 32, 2, out float velocity ) && velocity == 0.0f, Is.True );
 	}
@@ -128,7 +129,8 @@ internal sealed class TopologyInvalidationTests {
 
 		Assert.That( Update( TimeSpan.Zero ), Is.Zero );
 
-		using TripleBufferedLease<float> pressure = atmosphere.Frames.AcquirePressure();
+		using AtmosphereFrameLease frame = atmosphere.Frames.AcquireLatest();
+		SimulationFrameLayer pressure = frame.Pressure;
 		Assert.That( pressure.TryGet( x, y, out float value ) && value > 0.0f, Is.True );
 	}
 
@@ -139,7 +141,7 @@ internal sealed class TopologyInvalidationTests {
 	) {
 		IAtmosphere atmosphere = (IAtmosphere)Create( Kind.Atmosphere );
 		GasIndex nitrogen = atmosphere.Gases.GetIndex( "N2" );
-		using TripleBufferedLease<float> old = atmosphere.Frames.AcquireGas( nitrogen );
+		AtmosphereFrameLease old = atmosphere.Frames.AcquireLatest();
 		long version = _compiled.ChunkLayout.Version;
 		Assert.That( _assembly.TryRemoveCell( _placement, 31, 2 ), Is.True );
 		Assert.That( _compiled.ChunkLayout.Version, Is.EqualTo( version ) );
@@ -147,10 +149,11 @@ internal sealed class TopologyInvalidationTests {
 
 		_ = Update( TimeSpan.Zero );
 
-		using TripleBufferedLease<float> current = atmosphere.Frames.AcquireGas( nitrogen );
-		Assert.That( current.TryGet( -1, 2, out _ ), Is.False );
-		Assert.That( old.TryGet( -1, 2, out float amount ), Is.True );
+		Assert.That( old.GetGas( nitrogen ).TryGet( -1, 2, out float amount ), Is.True );
 		Assert.That( amount, Is.EqualTo( 100.0f ) );
+		old.Dispose();
+		using AtmosphereFrameLease current = atmosphere.Frames.AcquireLatest();
+		Assert.That( current.GetGas( nitrogen ).TryGet( -1, 2, out _ ), Is.False );
 	}
 
 	[TestCase( Kind.Atmosphere )]
@@ -171,8 +174,8 @@ internal sealed class TopologyInvalidationTests {
 
 		Assert.That( _compiled.IsStale, Is.False );
 		if( GetAtmosphere() is IAtmosphereState atmosphere ) {
-			using TripleBufferedLease<float> pressure = atmosphere.Frames.AcquirePressure();
-			Assert.That( pressure.IsPopulated( -1, 2 ), Is.False );
+			using AtmosphereFrameLease frame = atmosphere.Frames.AcquireLatest();
+			Assert.That( frame.Pressure.IsPopulated( -1, 2 ), Is.False );
 		}
 	}
 
@@ -211,7 +214,8 @@ internal sealed class TopologyInvalidationTests {
 
 		Assert.That( Update( TimeSpan.Zero ), Is.Zero );
 
-		using TripleBufferedLease<float> wind = atmosphere.Frames.AcquireWindX();
+		using AtmosphereFrameLease frame = atmosphere.Frames.AcquireLatest();
+		SimulationFrameLayer wind = frame.WindX;
 		Assert.That( atmosphere.WindX[-1, 2], Is.Zero );
 		Assert.That( atmosphere.WindX[0, 2], Is.Zero );
 		Assert.That( wind.TryGet( -1, 2, out float value ) && value == 0.0f, Is.True );

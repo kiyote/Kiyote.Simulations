@@ -1,4 +1,3 @@
-using Kiyote.Buffers.ChunkedGrids;
 using Kiyote.Geometry.Topology;
 using Kiyote.Simulations.LowFidelity.Atmospherics;
 using Microsoft.Extensions.DependencyInjection;
@@ -84,13 +83,19 @@ public class AtmosphereBenchmarks {
 		}
 	}
 
-	// What a render thread pays to read one published quantity.
+	[Benchmark]
+	public long AcquireLatestFrame() {
+		using AtmosphereFrameLease frame = _atmosphere.Frames.AcquireLatest();
+		return frame.StepCount;
+	}
+
 	[Benchmark]
 	public float ReadPressureFrame() {
 		float sum = 0.0f;
-		using TripleBufferedLease<float> pressure = _atmosphere.Frames.AcquirePressure();
-		foreach( GridChunk<float> chunk in pressure.EnumerateChunks() ) {
-			foreach( float value in chunk.Values ) {
+		using AtmosphereFrameLease frame = _atmosphere.Frames.AcquireLatest();
+		SimulationFrameLayer pressure = frame.Pressure;
+		foreach( int chunk in pressure.EnumerateChunks() ) {
+			foreach( float value in pressure.GetValues( chunk ) ) {
 				sum += value;
 			}
 		}

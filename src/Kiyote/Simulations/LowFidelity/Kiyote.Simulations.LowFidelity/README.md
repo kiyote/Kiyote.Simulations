@@ -54,16 +54,52 @@ must fit an integer. `Update` still returns **exchanges**, not ticks.
 Topology/material/solar preparation and convection-link rebuilding finish before
 time is consumed or physics runs. Preparation failures propagate without advancing
 either subsystem or publishing an intermediate frame. After all ticks and
-exchanges, pressure/wind are finalized and all atmosphere quantities are published
-once. Venting diagnostics cover the whole update. Zero-step updates still prepare,
-finalize queued inputs and publish, but do not advance physics or exchange cadence.
-Individual old leases stay unchanged; quantities remain independently leased,
-not an atomic multi-quantity snapshot.
+exchanges, pressure/wind are finalized and all atmosphere quantities and structural
+temperature are published together once. Venting diagnostics cover the whole update.
+Zero-step updates still prepare, finalize queued inputs and publish, but do not
+advance physics or exchange cadence.
+An acquired frame stays unchanged, including its topology, step count and diagnostics.
 
 Standalone atmosphere and thermal instances retain their independent accumulators
 and step caps. Public standalone factories and the combined factory use the same
 typed internal engine construction and configured stage services; combined stepping
 does not downcast public state views or call child elapsed-time updates.
+
+### Reading a complete frame
+
+Another thread must read published frames, not live atmosphere or thermal layers:
+
+```csharp
+using AtmosphereFrameLease frame = simulation.Frames.AcquireLatest();
+long physicsSteps = frame.StepCount;
+SimulationFrameLayer pressure = frame.Pressure;
+SimulationFrameLayer gasTemperature = frame.Temperature;
+SimulationFrameLayer structureTemperature = frame.StructuralTemperature;
+SimulationFrameLayer oxygen = frame.GetGas( frame.Gases.GetIndex( "O2" ) );
+```
+
+`IAtmosphericThermals.Frames` and its `Atmosphere.Frames` expose the same provider.
+Standalone atmosphere instances use `atmosphere.Frames.AcquireLatest()` and have
+`HasStructuralTemperature == false`; accessing structural temperature then throws
+`InvalidOperationException`.
+
+One acquisition leases every layer and its diagnostics from one complete update.
+It returns immediately with the latest completed frame, without copying or managed
+allocation, even while the producer prepares the next frame. The producer never
+waits for the reader. Intermediate updates may be skipped.
+
+`StepCount` counts fixed physics steps, not frame publications or value changes.
+Compare it with the last acquired frame's count to detect physics advancement.
+Zero-step updates can still publish inputs and topology changes with the same count.
+The provider's unleased `StepCount`/`Vented` properties remain convenience readouts;
+use the lease's properties for diagnostics aligned with its layers.
+
+Only one consumer and one outstanding whole-frame lease are supported. Dispose it
+before calling `AcquireLatest()` again, even after topology replacement. Disposing
+any copy releases that acquisition; stale disposal cannot release a later lease.
+Layer views expose read-only spans and must not outlive the lease. A held frame also
+survives simulation/compilation disposal; recreating a simulation requires switching
+to its new frame provider. Acquiring before any publication throws explicitly.
 
 ### Convection storage and traversal
 
@@ -115,9 +151,10 @@ If an edit needs current source-cell values, commit before making that edit.
   invalidate. Previously acquired leases remain unchanged.
 - Frame publication caches integer source-chunk mappings and validates occupancy
   only on initialization and after nonempty/full invalidation. Property-only edits
-  reuse matching grids. A replacement grid set and its mappings are installed only
-  after all quantities copy successfully; failed publication preserves the previous
-  frames/counters and retries pending validation. Every publication still copies
+  reuse a shared, immutable published topology. A replacement topology and its
+  mappings are published only after all quantities copy successfully; failed
+  publication preserves the previous frames/counters and retries pending validation.
+  Every publication still copies
   every quantity in full, reacquiring current buffer views after swaps.
 
 ### Structural edits

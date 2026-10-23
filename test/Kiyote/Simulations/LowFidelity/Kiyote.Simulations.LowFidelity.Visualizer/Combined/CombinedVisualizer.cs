@@ -99,8 +99,9 @@ internal sealed class CombinedVisualizer {
 				_ = simulation.Update( UpdateInterval );
 			}
 
-			Render( ship, thermal.Temperature, null, builder );
-			Render( ship, atmosphere.Temperature, atmosphere, gasBuilder );
+			using AtmosphereFrameLease snapshot = simulation.Frames.AcquireLatest();
+			Render( ship, snapshot.StructuralTemperature, snapshot, false, builder );
+			Render( ship, snapshot.Temperature, snapshot, true, gasBuilder );
 		}
 		builder.FinishAnimation();
 		gasBuilder.FinishAnimation();
@@ -110,21 +111,22 @@ internal sealed class CombinedVisualizer {
 	// atmosphere is given) take the frame minimum so they render black without skewing the range.
 	private void Render(
 		DenseGridSource<AtmosphereCell> ship,
-		IGridLayer<float> temperature,
-		IAtmosphereState? atmosphere,
+		SimulationFrameLayer temperature,
+		AtmosphereFrameLease frame,
+		bool requireGas,
 		IAnimationBuilder builder
 	) {
 		float minimum = float.MaxValue;
 		for( int row = 0; row < AsciiGridSource.Height; row++ ) {
 			for( int column = 0; column < AsciiGridSource.Width; column++ ) {
-				if( IsShown( ship, atmosphere, column, row ) ) {
+				if( IsShown( ship, frame, requireGas, column, row ) ) {
 					minimum = MathF.Min( minimum, temperature[column, row] );
 				}
 			}
 		}
 		for( int row = 0; row < AsciiGridSource.Height; row++ ) {
 			for( int column = 0; column < AsciiGridSource.Width; column++ ) {
-				_values[column, row] = IsShown( ship, atmosphere, column, row )
+				_values[column, row] = IsShown( ship, frame, requireGas, column, row )
 					? temperature[column, row]
 					: minimum;
 			}
@@ -135,11 +137,23 @@ internal sealed class CombinedVisualizer {
 
 	private static bool IsShown(
 		DenseGridSource<AtmosphereCell> ship,
-		IAtmosphereState? atmosphere,
+		AtmosphereFrameLease frame,
+		bool requireGas,
 		int column,
 		int row
 	) {
-		return ship.IsOccupied( column, row )
-			&& ( atmosphere is null || atmosphere.GetTotalGas( column, row ) > 0.0f );
+		if( !ship.IsOccupied( column, row ) ) {
+			return false;
+		}
+		if( !requireGas ) {
+			return true;
+		}
+		float total = 0.0f;
+		for( int g = 0; g < frame.Gases.Count; g++ ) {
+			if( frame.GetGas( new GasIndex( g ) ).TryGet( column, row, out float gas ) ) {
+				total += gas;
+			}
+		}
+		return total > 0.0f;
 	}
 }

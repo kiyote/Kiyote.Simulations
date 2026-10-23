@@ -41,7 +41,8 @@ API; no dependency downgrade or local package is needed.
 The simulation and visualizers use Kiyote.Buffers 0.16.0, with the visualizers also
 using Kiyote.Buffers.Numerics 0.16.0.
 
-- Frame readers must dispose a quantity's lease before reacquiring it. Overlapping
+- Frame readers use `AcquireLatest()` and must dispose the whole-frame lease before
+  acquiring again, including after topology changes. Overlapping
   acquisitions throw `InvalidOperationException`. Disposing a copied lease releases
   that acquisition; disposing an old copy again cannot release a newer lease.
   Previously published leases remain valid across simulation updates and topology

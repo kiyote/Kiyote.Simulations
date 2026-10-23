@@ -3,22 +3,18 @@ using Kiyote.Geometry.Topology;
 
 namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 
-// Holds one TripleBufferedChunkedGrid<float> per published quantity, laid out as
-// [pressure, temperature, windX, windY, gas..., condensate...] with null for gases that do not
-// condense. The simulation thread replaces the whole array when the topology changes, so the
-// reader never sees a grid whose topology is being edited.
 internal sealed class AtmosphereFrames : IAtmosphereFrames {
 
-	private const int PressureIndex = 0;
-	private const int TemperatureIndex = 1;
-	private const int WindXIndex = 2;
-	private const int WindYIndex = 3;
-	private const int FirstGasIndex = 4;
+	private const int Published = 4;
+	private const int IndexMask = 3;
 
-	private readonly IGasRegistry _gases;
-	private readonly int _gasCount;
-	private TripleBufferedChunkedGrid<float>?[] _grids;
-	private int[][] _sourceChunks = [];
+	private readonly AtmosphereFrameBuffer?[] _buffers = new AtmosphereFrameBuffer?[3];
+	private int _writable;
+	private int _reader = 1;
+	private int _middle = 2;
+	private long _leaseState;
+	private long _leaseGeneration;
+	private AtmosphereFrameBuffer? _lastPublished;
 	private bool _validateTopology = true;
 	private long _stepCount;
 	private float _vented;
@@ -26,53 +22,47 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 	public AtmosphereFrames(
 		IGasRegistry gases
 	) {
-		_gases = gases;
-		_gasCount = gases.Count;
-		_grids = [];
+		Gases = gases;
 	}
 
-	IGasRegistry IAtmosphereFrames.Gases => _gases;
+	public IGasRegistry Gases { get; }
 
 	long IAtmosphereFrames.StepCount => Volatile.Read( ref _stepCount );
 
 	float IAtmosphereFrames.Vented => Volatile.Read( ref _vented );
 
-	TripleBufferedLease<float> IAtmosphereFrames.AcquirePressure() {
-		return Acquire( PressureIndex );
+	AtmosphereFrameLease IAtmosphereFrames.AcquireLatest() {
+		long token = Interlocked.Increment( ref _leaseGeneration );
+		if( token <= 0 ) {
+			throw new InvalidOperationException( "The frame lease generation is exhausted." );
+		}
+		if( Interlocked.CompareExchange( ref _leaseState, token, 0 ) != 0 ) {
+			throw new InvalidOperationException( "A frame lease is already outstanding." );
+		}
+
+		// The consumer owns _reader, the producer owns _writable, and only _middle is exchanged.
+		// The published flag prevents a reader from exchanging its latest frame for an older one.
+		if( ( Volatile.Read( ref _middle ) & Published ) != 0 ) {
+			_reader = Interlocked.Exchange( ref _middle, _reader ) & IndexMask;
+		}
+		AtmosphereFrameBuffer? buffer = _buffers[_reader];
+		if( buffer is null ) {
+			Release( token );
+			throw new InvalidOperationException( "No simulation frame has been published." );
+		}
+		return new AtmosphereFrameLease( this, buffer, token );
 	}
 
-	TripleBufferedLease<float> IAtmosphereFrames.AcquireTemperature() {
-		return Acquire( TemperatureIndex );
-	}
-
-	TripleBufferedLease<float> IAtmosphereFrames.AcquireWindX() {
-		return Acquire( WindXIndex );
-	}
-
-	TripleBufferedLease<float> IAtmosphereFrames.AcquireWindY() {
-		return Acquire( WindYIndex );
-	}
-
-	TripleBufferedLease<float> IAtmosphereFrames.AcquireGas(
-		GasIndex gas
+	internal void Release(
+		long token
 	) {
-		return Acquire( FirstGasIndex + gas.Value );
-	}
-
-	TripleBufferedLease<float> IAtmosphereFrames.AcquireCondensate(
-		GasIndex gas
-	) {
-		TripleBufferedChunkedGrid<float>? grid = Volatile.Read( ref _grids )[FirstGasIndex + _gasCount + gas.Value];
-		return grid?.Acquire()
-			?? throw new ArgumentException( $"Gas '{_gases.GetDefinition( gas ).Id}' does not condense.", nameof( gas ) );
+		_ = Interlocked.CompareExchange( ref _leaseState, 0, token );
 	}
 
 	public void InvalidateTopology() {
 		_validateTopology = true;
 	}
 
-	// Called only by the simulation thread. Copies every layer into the buffer the reader cannot
-	// see, then publishes it.
 	public void Publish(
 		long stepCount,
 		float vented,
@@ -81,138 +71,115 @@ internal sealed class AtmosphereFrames : IAtmosphereFrames {
 		IGridLayer<float> windX,
 		IGridLayer<float> windY,
 		IGridLayer<float>[] gas,
-		IGridLayer<float>?[] condensate
+		IGridLayer<float>?[] condensate,
+		IGridLayer<float>? structuralTemperature = null
 	) {
-		GridLayout layout = pressure.Layout;
-		TripleBufferedChunkedGrid<float>?[] grids = _grids;
-		int[][] sourceChunks = _sourceChunks;
-		if( _validateTopology && !Matches( grids, layout ) ) {
-			grids = Create( layout, condensate );
-			sourceChunks = CreateMappings( grids, layout );
+		GridLayout sourceLayout = pressure.Layout;
+		AtmosphereFrameBuffer? previous = _lastPublished;
+		ChunkedGridLayout layout;
+		int[] sourceChunks;
+		if( previous is null || ( _validateTopology && !Matches( previous.Layout, sourceLayout ) ) ) {
+			layout = CreateLayout( sourceLayout );
+			sourceChunks = CreateMapping( layout, sourceLayout );
+		} else {
+			layout = previous.Layout;
+			sourceChunks = previous.SourceChunks;
 		}
 
-		Copy( pressure, grids[PressureIndex]!, sourceChunks[PressureIndex] );
-		Copy( temperature, grids[TemperatureIndex]!, sourceChunks[TemperatureIndex] );
-		Copy( windX, grids[WindXIndex]!, sourceChunks[WindXIndex] );
-		Copy( windY, grids[WindYIndex]!, sourceChunks[WindYIndex] );
-		for( int g = 0; g < _gasCount; g++ ) {
-			int gasIndex = FirstGasIndex + g;
-			Copy( gas[g], grids[gasIndex]!, sourceChunks[gasIndex] );
-			IGridLayer<float>? layer = condensate[g];
-			if( layer is not null ) {
-				int condensateIndex = FirstGasIndex + _gasCount + g;
-				Copy( layer, grids[condensateIndex]!, sourceChunks[condensateIndex] );
+		AtmosphereFrameBuffer? buffer = _buffers[_writable];
+		if( buffer is null || !ReferenceEquals( buffer.Layout, layout )
+			|| ( buffer.StructuralTemperature is not null ) != ( structuralTemperature is not null )
+		) {
+			buffer = new AtmosphereFrameBuffer( layout, sourceChunks, condensate, structuralTemperature is not null );
+			_buffers[_writable] = buffer;
+		}
+
+		Copy( pressure, buffer.Pressure, sourceChunks );
+		Copy( temperature, buffer.Temperature, sourceChunks );
+		Copy( windX, buffer.WindX, sourceChunks );
+		Copy( windY, buffer.WindY, sourceChunks );
+		for( int g = 0; g < gas.Length; g++ ) {
+			Copy( gas[g], buffer.Gas[g], sourceChunks );
+			if( condensate[g] is IGridLayer<float> layer ) {
+				Copy( layer, buffer.Condensate[g]!, sourceChunks );
 			}
 		}
-		foreach( TripleBufferedChunkedGrid<float>? grid in grids ) {
-			grid?.Swap();
+		if( structuralTemperature is not null ) {
+			Copy( structuralTemperature, buffer.StructuralTemperature!, sourceChunks );
 		}
+		buffer.StepCount = stepCount;
+		buffer.Vented = vented;
 
-		_sourceChunks = sourceChunks;
-		Volatile.Write( ref _grids, grids );
+		// A single exchange publishes every layer, its immutable topology and its diagnostics.
+		_writable = Interlocked.Exchange( ref _middle, _writable | Published ) & IndexMask;
+		_lastPublished = buffer;
 		_validateTopology = false;
 		Volatile.Write( ref _stepCount, stepCount );
 		Volatile.Write( ref _vented, vented );
 	}
 
-	private TripleBufferedLease<float> Acquire(
-		int index
+	private static ChunkedGridLayout CreateLayout(
+		GridLayout source
 	) {
-		return Volatile.Read( ref _grids )[index]!.Acquire();
-	}
-
-	private TripleBufferedChunkedGrid<float>?[] Create(
-		GridLayout layout,
-		IGridLayer<float>?[] condensate
-	) {
-		ChunkedGrid<float> template = new ChunkedGrid<float>( layout.ChunkSize );
-		foreach( int chunk in layout.EnumerateChunks() ) {
-			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
+		ChunkedGridLayout layout = new ChunkedGridLayout( source.ChunkSize );
+		foreach( int chunk in source.EnumerateChunks() ) {
+			ReadOnlySpan<ulong> presence = source.GetPresence( chunk );
 			if( presence.ContainsAnyExcept( 0UL ) ) {
-				presence.CopyTo( template.GetOrCreateChunk( layout.GetChunkColumn( chunk ), layout.GetChunkRow( chunk ) ).Presence );
+				int target = layout.GetOrCreateChunk( source.GetChunkColumn( chunk ), source.GetChunkRow( chunk ) );
+				presence.CopyTo( layout.GetPresence( target ) );
 			}
 		}
-
-		TripleBufferedChunkedGrid<float>?[] grids = new TripleBufferedChunkedGrid<float>?[FirstGasIndex + ( 2 * _gasCount )];
-		for( int i = 0; i < FirstGasIndex + _gasCount; i++ ) {
-			grids[i] = CreateGrid( template );
-		}
-		for( int g = 0; g < _gasCount; g++ ) {
-			if( condensate[g] is not null ) {
-				grids[FirstGasIndex + _gasCount + g] = CreateGrid( template );
-			}
-		}
-		return grids;
+		return layout;
 	}
 
-	private static TripleBufferedChunkedGrid<float> CreateGrid(
-		ChunkedGrid<float> template
-	) {
-		TripleBufferedChunkedGrid<float> grid = new TripleBufferedChunkedGrid<float>( template.ChunkSize );
-		grid.Attach( template, 0, 0 );
-		return grid;
-	}
-
-	// Every grid in a set shares one topology, so checking the first is enough.
 	private static bool Matches(
-		TripleBufferedChunkedGrid<float>?[] grids,
-		GridLayout layout
+		ChunkedGridLayout published,
+		GridLayout source
 	) {
-		if( grids.Length == 0 ) {
+		if( published.ChunkSize != source.ChunkSize ) {
 			return false;
 		}
-		TripleBufferedChunkedGrid<float> published = grids[PressureIndex]!;
-		if( published.ChunkSize != layout.ChunkSize ) {
+		int populated = 0;
+		foreach( int chunk in source.EnumerateChunks() ) {
+			if( source.GetPresence( chunk ).ContainsAnyExcept( 0UL ) ) {
+				populated++;
+			}
+		}
+		if( populated != published.ChunkCount ) {
 			return false;
 		}
-		int matched = 0;
-		foreach( int chunk in layout.EnumerateChunks() ) {
-			ReadOnlySpan<ulong> presence = layout.GetPresence( chunk );
-			if( published.TryGetChunk( layout.GetChunkColumn( chunk ), layout.GetChunkRow( chunk ), out BufferedChunk<float> target ) ) {
-				if( !presence.SequenceEqual( target.Current.Presence ) ) {
-					return false;
-				}
-				matched++;
-			} else if( presence.ContainsAnyExcept( 0UL ) ) {
+		foreach( int chunk in published.EnumerateChunks() ) {
+			if( !source.TryGetChunk( published.GetChunkColumn( chunk ), published.GetChunkRow( chunk ), out int target )
+				|| !published.GetPresence( chunk ).SequenceEqual( source.GetPresence( target ) )
+			) {
 				return false;
 			}
 		}
-		return matched == published.ChunkCount;
+		return true;
 	}
 
 	private static void Copy(
 		IGridLayer<float> source,
-		TripleBufferedChunkedGrid<float> target,
+		ChunkedGridLayer<float> target,
 		ReadOnlySpan<int> sourceChunks
 	) {
-		int index = 0;
-		foreach( BufferedChunk<float> published in target.EnumerateChunks() ) {
-			source.GetValues( sourceChunks[index++] ).CopyTo( published.Current.Values );
+		foreach( int chunk in target.Layout.EnumerateChunks() ) {
+			source.GetValues( sourceChunks[chunk] ).CopyTo( target.GetValues( chunk ) );
 		}
 	}
 
-	private static int[][] CreateMappings(
-		TripleBufferedChunkedGrid<float>?[] grids,
-		GridLayout layout
+	private static int[] CreateMapping(
+		ChunkedGridLayout target,
+		GridLayout source
 	) {
-		int[][] mappings = new int[grids.Length][];
-		for( int i = 0; i < grids.Length; i++ ) {
-			TripleBufferedChunkedGrid<float>? grid = grids[i];
-			if( grid is null ) {
-				mappings[i] = [];
-				continue;
+		int[] mapping = new int[target.ChunkCapacity];
+		foreach( int chunk in target.EnumerateChunks() ) {
+			if( !source.TryGetChunk( target.GetChunkColumn( chunk ), target.GetChunkRow( chunk ), out int sourceChunk ) ) {
+				throw new InvalidOperationException( "Published chunk has no corresponding source chunk." );
 			}
-			int[] chunks = new int[grid.ChunkCount];
-			int index = 0;
-			foreach( BufferedChunk<float> target in grid.EnumerateChunks() ) {
-				if( !layout.TryGetChunk( target.Current.ChunkColumn, target.Current.ChunkRow, out int chunk ) ) {
-					throw new InvalidOperationException( "Published chunk has no corresponding source chunk." );
-				}
-				chunks[index++] = chunk;
-			}
-			mappings[i] = chunks;
+			mapping[chunk] = sourceChunk;
 		}
-		return mappings;
+		return mapping;
 	}
 
 }
