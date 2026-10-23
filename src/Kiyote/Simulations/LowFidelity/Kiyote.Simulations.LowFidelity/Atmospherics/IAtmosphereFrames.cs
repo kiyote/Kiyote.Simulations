@@ -10,6 +10,8 @@ namespace Kiyote.Simulations.LowFidelity.Atmospherics;
 // Quantities are leased independently, so two leases may come from different Updates.
 // Only one thread may acquire leases; dispose each lease before acquiring the same quantity
 // again, treat leased buffers as read-only and do not use a lease after disposing it.
+// Overlapping acquisitions of the same quantity throw InvalidOperationException. Disposing
+// a lease copy releases that acquisition; stale disposal cannot release a newer acquisition.
 // When the topology changes the atmosphere publishes into new grids; leases on the previous
 // grids stay valid until disposed.
 public interface IAtmosphereFrames {

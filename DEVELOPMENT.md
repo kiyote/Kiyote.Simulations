@@ -36,6 +36,24 @@ calls the removed `Kiyote.Buffers.AddBuffers()` method and fails at startup with
 the current Buffers dependency. The GIF writer itself supports the current buffer
 API; no dependency downgrade or local package is needed.
 
+## Kiyote.Buffers 0.16 compatibility
+
+The simulation and visualizers use Kiyote.Buffers 0.16.0, with the visualizers also
+using Kiyote.Buffers.Numerics 0.16.0.
+
+- Frame readers must dispose a quantity's lease before reacquiring it. Overlapping
+  acquisitions throw `InvalidOperationException`. Disposing a copied lease releases
+  that acquisition; disposing an old copy again cannot release a newer lease.
+  Previously published leases remain valid across simulation updates and topology
+  replacement until disposed.
+- Buffer dimensions must be positive, indices must stay within logical dimensions,
+  and numeric operations require matching source/destination shapes. The visualizers
+  use matching buffers and logical coordinates; no padded-index access is required.
+- Numeric scaling rejects nonfinite inputs and maps constant input to zero. The
+  visualizers use `ScaleToRange` to render floating-point state as byte pixels.
+  Run both visualizers after dependency updates to exercise scaling and GIF writing,
+  not just compilation.
+
 ## Clean up filemodes
 
 ```bash

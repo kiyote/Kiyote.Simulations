@@ -74,6 +74,52 @@ public sealed class AtmosphereFramesTests {
 	}
 
 	[Test]
+	public void AcquirePressure_LeaseAlreadyHeld_Throws() {
+		Publish( 1 );
+		using TripleBufferedLease<float> held = _frames.AcquirePressure();
+
+		Assert.Throws<InvalidOperationException>( () => _frames.AcquirePressure() );
+	}
+
+	[Test]
+	public void Publish_StaleLeaseCopyDisposed_PreservesNewerLease() {
+		_pressure[1, 1] = 1f;
+		Publish( 1 );
+		TripleBufferedLease<float> first = _frames.AcquirePressure();
+		TripleBufferedLease<float> stale = first;
+		first.Dispose();
+
+		_pressure[1, 1] = 2f;
+		Publish( 2 );
+		using TripleBufferedLease<float> held = _frames.AcquirePressure();
+		stale.Dispose();
+
+		for( int step = 3; step <= 8; step++ ) {
+			_pressure[1, 1] = step;
+			Publish( step );
+		}
+
+		using( Assert.EnterMultipleScope() ) {
+			Assert.That( held.TryGet( 1, 1, out float value ) && value == 2f, Is.True );
+			Assert.Throws<InvalidOperationException>( () => _frames.AcquirePressure() );
+		}
+	}
+
+	[Test]
+	public void AcquirePressure_RepeatedAcquisitions_AllocatesNoManagedMemory() {
+		Publish( 1 );
+		for( int i = 0; i < 100; i++ ) {
+			using TripleBufferedLease<float> lease = _frames.AcquirePressure();
+		}
+		long before = GC.GetAllocatedBytesForCurrentThread();
+		for( int i = 0; i < 100; i++ ) {
+			using TripleBufferedLease<float> lease = _frames.AcquirePressure();
+		}
+		long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+		Assert.That( allocated, Is.Zero );
+	}
+
+	[Test]
 	public void Publish_WhileLeaseHeld_LeaseIsUnchanged() {
 		_gas[0][1, 1] = 1.0f;
 		Publish( 1 );
